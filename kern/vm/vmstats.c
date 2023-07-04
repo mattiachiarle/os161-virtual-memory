@@ -91,6 +91,7 @@ void add_tlb_fault(void){
 }
 void add_tlb_type_fault(int type){
     spinlock_acquire(&stat.lock);
+    //add_tlb_fault(); ??? where do I do that
     switch (type)
     {
     case FAULT_W_FREE:
