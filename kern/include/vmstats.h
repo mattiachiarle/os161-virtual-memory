@@ -23,24 +23,30 @@ void init_stat(void);
 /*
  * This function is used to manage the following statistics:
  * -TLB faults
+ * 
+ * @param: type of fault
+ */
+uint32_t tlb_fault_stats(void);
+/*
+ * This function is used to manage the following statistics:
  * -TLB faults with free
  * -TLB faults with replace
  * 
  * @param: type of fault
  */
-void tlb_fault_stats(int);
+uint32_t tlb_type_fault_stats(int);
 
 /*
  * This function is used to manage the following statistics:
  * -TLB invalidations
  */
-void invalidation_stat(void);
+uint32_t invalidation_stat(void);
 
 /*
  * This function is used to manage the following statistics:
  * -TLB reloads
  */
-void reloads_stat(void);
+uint32_t reloads_stat(void);
 
 /*
  * This function is used to manage the following statistics:
