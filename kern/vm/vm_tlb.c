@@ -105,7 +105,7 @@ int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
     }
     tlb_read(&prevHi, &prevLo, entry);
     /*notify the pt that the entry with that virtual address is not in tlb anymore*/
-    //cabodi(prevHi);
+    cabodi(prevHi);
     tlb_write(hi, lo, entry);
     /*update tlb faults replace*/
     add_pt_type_fault(FAULT_W_REPLACE);
