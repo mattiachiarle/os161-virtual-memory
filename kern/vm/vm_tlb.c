@@ -1,5 +1,7 @@
 #include "vm_tlb.h"
 #include "tlb.h"
+#include "pt.h"
+#include "spl.h"
 /*
  * vm.h includes the definition of vm_fault, which is used to handle the
  * TLB misses
@@ -12,7 +14,36 @@ int tlb_remove(void){
 }
 
 int vm_fault(int faulttype, vaddr_t faultaddress){
-    return -1;
+    paddr_t paddr;
+    int spl = splhigh(); // so that the control does nit pass to another waiting process.
+    /*I update the statistics*/
+    add_tlb_fault();
+    /*I extract the virtual address of the corresponding page*/
+    faultaddress &= PAGE_FRAME; // do I ?
+    switch (faulttype)
+    {
+    case VM_FAULT_READ:
+        
+        break;
+    case VM_FAULT_WRITE:
+      
+        break;
+    case VM_FAULT_READONLY:
+        kprintf("You tried to write a readonly segment... The process is ending...");
+        //sys__exit(0);
+        break;
+    
+    default:
+        break;
+    }
+    /*If I am here is either a VM_FAULT_READ or a VM_FAULT_WRITE*/
+    /*did mattia set up the as correctly?*/
+    KASSERT(as_is_ok() == 1);
+
+    paddr = get_page(faultaddress);
+    tlb_insert(faultaddress, paddr);
+    splx(spl);
+    return 0;
 }
 
 int tlb_victim(void){
@@ -40,7 +71,7 @@ int segment_is_readonly(vaddr_t vaddr){
 int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
     /*faultpaddr is the address of the beginning of the physical frame, so I have to remember that I do not have to pass the whole address but I have to mask the ls 12 bits*/
     int entry, valid, is_RO; 
-    uint32_t hi, lo;
+    uint32_t hi, lo, prevHi, prevLo;
     is_RO = segment_is_readonly(faultvaddr); // boolean that tells me if the dirty bit has to be (un)set
     
     /*step 1: look for a free entry and update the corresponding statistic (FREE)*/
@@ -63,7 +94,7 @@ int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
         }
 
     }
-    /*step 2: I have not found an invalid table, so,,, look for a victim, override, update the correspnding statistic (REPLACE)*/
+    /*step 2: I have not found an invalid entry, so,,, look for a victim, override, update the correspnding statistic (REPLACE)*/
     entry = tlb_victim();
      hi = faultvaddr;
     lo = faultpaddr | TLBLO_VALID;
@@ -72,6 +103,9 @@ int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
         /*I have to set a dirty bit that is basically a write privilege*/
         lo = lo | TLBLO_DIRTY; 
     }
+    tlb_read(&prevHi, &prevLo, entry);
+    /*notify the pt that the entry with that virtual address is not in tlb anymore*/
+    //cabodi(prevHi);
     tlb_write(hi, lo, entry);
     /*update tlb faults replace*/
     add_pt_type_fault(FAULT_W_REPLACE);
@@ -95,7 +129,28 @@ int tlb_invalidate_entry(paddr_t paddr){
         tlb_read(&hi, &lo, i);
         frame_addr_stored = lo & TLBLO_PPAGE ; // I extract the physical address stored in each entry
         if(frame_addr_stored == frame_addr)
-            tlb_write(TLBHI_INVALID(i), TLBLO_INVALID());
+            tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
     }
     return 0;
+}
+
+int tlb_invalidate_all(){
+    for(int i = 0; i<NUM_TLB; i++){
+            tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+    }
+}
+
+int as_is_ok(){
+    struct addrspace as = proc_getas();
+    if(as == NULL)
+        return 0;
+    if(as->as_vbase1 == 0)
+        return 0;
+    if(as->as_vbase2 == 0)
+        return 0;
+    if(as->npages1 == 0)
+        return 0;
+    if(as->npages2 == 0)
+        return 0;
+    return 1;
 }

@@ -41,3 +41,14 @@ int tlb_entry_is_valid(int i);
  * @return: 0 if ok
 */
 int tlb_invalidate_entry(paddr_t paddr);
+
+/**
+ * this function invalidates the whole tlb
+*/
+int tlb_invalidate_all();
+/**
+ * this function checks if the as has been correcty set
+ * @return 0 if not ok
+ * @return 1 if ok
+ * */
+int as_is_ok();
