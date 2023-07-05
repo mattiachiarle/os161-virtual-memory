@@ -33,6 +33,8 @@
 #include <addrspace.h>
 #include <vm.h>
 #include <proc.h>
+#include "spl.h"
+#include "vm_tlb.h"
 
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
@@ -91,7 +93,7 @@ void
 as_activate(void)
 {
 	struct addrspace *as;
-
+	int spl;
 	as = proc_getas();
 	if (as == NULL) {
 		/*
@@ -101,9 +103,9 @@ as_activate(void)
 		return;
 	}
 
-	/*
-	 * Write this.
-	 */
+	spl = splhigh();
+	tlb_invalidate_all();
+	splx(spl);
 }
 
 void
