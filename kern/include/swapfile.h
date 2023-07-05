@@ -1,9 +1,28 @@
+#ifndef _SWAPFILE_H_
+#define _SWAPFILE_H_
+
+#include "types.h"
+#include "addrspace.h"
+#include "kern/fcntl.h"
+#include "uio.h"
+#include "vnode.h"
+#include "copyinout.h"
+#include "lib.h"
+#include "vfs.h"
+
 /*
  * Data structure to store the association 
  * (virtual address-pid) -> swapfile position
  */
 struct swapfile{
+    struct swap_cell *elements;
+    struct vnode *v;
+    size_t size;
+};
 
+struct swap_cell{
+    pid_t pid; //it is used also as a flag to check if a certain cell is free or not
+    vaddr_t vaddr;
 };
 
 /*
@@ -15,7 +34,7 @@ struct swapfile{
  * 
  * @return: -1 in case of errors, 0 otherwise
 */
-int load_page(vaddr_t, pid_t, paddr_t);
+int load_swap(vaddr_t, pid_t, paddr_t);
 
 /*
  * This function saves a frame into the swapfile.
@@ -27,4 +46,10 @@ int load_page(vaddr_t, pid_t, paddr_t);
  * 
  * @return: -1 in case of errors, 0 otherwise
 */
-int store_page(vaddr_t, pid_t, paddr_t);
+int store_swap(vaddr_t, pid_t, paddr_t);
+
+int swap_init(void);
+
+void remove_process_from_swap(pid_t pid);
+
+#endif /* _SWAPFILE_H_ */

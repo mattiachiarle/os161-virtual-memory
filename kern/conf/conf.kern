@@ -424,6 +424,7 @@ defoption netfs
 # Note that "emufs" is completely contained in the "emu" device.
 #
 
+defoption test
 
 ########################################
 #                                      #
@@ -441,3 +442,5 @@ file		test/semunit.c
 file		test/kmalloctest.c
 file		test/fstest.c
 optfile net	test/nettest.c
+file        vm/segments.c
+file        vm/swapfile.c
