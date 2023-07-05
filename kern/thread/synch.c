@@ -154,11 +154,18 @@ lock_create(const char *name)
                 return NULL;
         }
 
-	HANGMAN_LOCKABLEINIT(&lock->lk_hangman, lock->lk_name);
-
         // add stuff here as needed
 
-        return lock;
+
+	lock->lk_wchan = wchan_create(lock->lk_name);
+	if (lock->lk_wchan == NULL) {
+	  kfree(lock->lk_name);
+	  kfree(lock);
+	  return NULL;
+	}
+	lock->lk_owner = NULL;
+	spinlock_init(&lock->lk_lock);
+    return lock;
 }
 
 void
@@ -167,7 +174,8 @@ lock_destroy(struct lock *lock)
         KASSERT(lock != NULL);
 
         // add stuff here as needed
-
+		spinlock_cleanup(&lock->lk_lock);
+		wchan_destroy(lock->lk_wchan);
         kfree(lock->lk_name);
         kfree(lock);
 }
@@ -175,36 +183,55 @@ lock_destroy(struct lock *lock)
 void
 lock_acquire(struct lock *lock)
 {
-	/* Call this (atomically) before waiting for a lock */
-	//HANGMAN_WAIT(&curthread->t_hangman, &lock->lk_hangman);
+    // Write this
+    KASSERT(lock != NULL);
+	if (lock_do_i_hold(lock)) {
+	  kprintf("AAACKK!\n");
+	}
+	KASSERT(!(lock_do_i_hold(lock)));
 
-        // Write this
+    KASSERT(curthread->t_in_interrupt == false);
 
-        (void)lock;  // suppress warning until code gets written
-
-	/* Call this (atomically) once the lock is acquired */
-	//HANGMAN_ACQUIRE(&curthread->t_hangman, &lock->lk_hangman);
+	spinlock_acquire(&lock->lk_lock);        
+	while (lock->lk_owner != NULL) {
+		wchan_sleep(lock->lk_wchan, &lock->lk_lock);
+    }
+	KASSERT(lock->lk_owner == NULL);
+	lock->lk_owner=curthread;
+	spinlock_release(&lock->lk_lock);
 }
 
 void
 lock_release(struct lock *lock)
 {
-	/* Call this (atomically) when the lock is released */
-	//HANGMAN_RELEASE(&curthread->t_hangman, &lock->lk_hangman);
-
         // Write this
-
-        (void)lock;  // suppress warning until code gets written
+	KASSERT(lock != NULL);
+	KASSERT(lock_do_i_hold(lock));
+	spinlock_acquire(&lock->lk_lock);
+        lock->lk_owner=NULL;
+	/*  G.Cabodi - 2019: no problem here owning a spinlock, as V/wchan_wakeone 
+	    do not lead to wait state */
+    wchan_wakeone(lock->lk_wchan, &lock->lk_lock);
+	spinlock_release(&lock->lk_lock);
 }
 
 bool
 lock_do_i_hold(struct lock *lock)
 {
         // Write this
-
-        (void)lock;  // suppress warning until code gets written
-
-        return true; // dummy until code gets written
+        bool res;
+	/*  G.Cabodi - 2019: this could possibly work without spinlock for mutual 
+	    exclusion, which could simplify the semaphore-based solution, by 
+	    removing the spinlock. 
+	    Whenever the current thread owns the lock, the test is safe without 
+	    guaranteeing mutual exclusion. 
+	    If NOT the owner, a wrong verdict could happen (very low chance!!!)
+            by wrongly reading a pointer == curthread. However, using the spinlock 
+	    is good practice for shared data. */
+	spinlock_acquire(&lock->lk_lock);
+	res = lock->lk_owner == curthread;
+	spinlock_release(&lock->lk_lock);
+	return res;
 }
 
 ////////////////////////////////////////////////////////////
@@ -215,22 +242,28 @@ lock_do_i_hold(struct lock *lock)
 struct cv *
 cv_create(const char *name)
 {
-        struct cv *cv;
+	struct cv *cv;
 
-        cv = kmalloc(sizeof(*cv));
-        if (cv == NULL) {
-                return NULL;
-        }
+	cv = kmalloc(sizeof(*cv));
+	if (cv == NULL) {
+			return NULL;
+	}
 
-        cv->cv_name = kstrdup(name);
-        if (cv->cv_name==NULL) {
-                kfree(cv);
-                return NULL;
-        }
+	cv->cv_name = kstrdup(name);
+	if (cv->cv_name==NULL) {
+			kfree(cv);
+			return NULL;
+	}
 
         // add stuff here as needed
-
-        return cv;
+	cv->cv_wchan = wchan_create(cv->cv_name);
+	if (cv->cv_wchan == NULL) {
+	        kfree(cv->cv_name);
+		kfree(cv);
+		return NULL;
+	}
+	spinlock_init(&cv->cv_lock);
+	return cv;
 }
 
 void
@@ -239,31 +272,55 @@ cv_destroy(struct cv *cv)
         KASSERT(cv != NULL);
 
         // add stuff here as needed
-
-        kfree(cv->cv_name);
-        kfree(cv);
+	spinlock_cleanup(&cv->cv_lock);
+	wchan_destroy(cv->cv_wchan);
+	kfree(cv->cv_name);
+	kfree(cv);
 }
 
 void
 cv_wait(struct cv *cv, struct lock *lock)
 {
         // Write this
-        (void)cv;    // suppress warning until code gets written
-        (void)lock;  // suppress warning until code gets written
+    KASSERT(lock != NULL);
+	KASSERT(cv != NULL);
+	KASSERT(lock_do_i_hold(lock));
+
+	spinlock_acquire(&cv->cv_lock);
+	/* G.Cabodi - 2019: spinlock already owned as atomic lock_release+wchan_sleep
+	   needed */
+	lock_release(lock);
+	wchan_sleep(cv->cv_wchan,&cv->cv_lock);
+	spinlock_release(&cv->cv_lock);
+	/* G.Cabodi - 2019: spinlock already  released to avoid ownership while
+	   (possibly) going to wait state in lock_acquire. 
+	   Atomicity wakeup+lock_acquire not guaranteed (but not necessary!) */
+	lock_acquire(lock);
 }
 
 void
 cv_signal(struct cv *cv, struct lock *lock)
 {
         // Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+    KASSERT(lock != NULL);
+	KASSERT(cv != NULL);
+	KASSERT(lock_do_i_hold(lock));
+	/* g.Cabodi - 2019: here the spinlock is NOT required, as no atomic operation 
+	   has to be done. The spinlock is just acquired because needed by wakeone */
+	spinlock_acquire(&cv->cv_lock);
+	wchan_wakeone(cv->cv_wchan,&cv->cv_lock);
+	spinlock_release(&cv->cv_lock);
 }
 
 void
 cv_broadcast(struct cv *cv, struct lock *lock)
 {
 	// Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+    KASSERT(lock != NULL);
+	KASSERT(cv != NULL);
+	KASSERT(lock_do_i_hold(lock));
+	/* G.Cabodi - 2019: see comment on spinlocks in cv_signal */
+	spinlock_acquire(&cv->cv_lock);
+	wchan_wakeall(cv->cv_wchan,&cv->cv_lock);
+	spinlock_release(&cv->cv_lock);
 }

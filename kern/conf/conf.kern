@@ -426,6 +426,9 @@ defoption netfs
 
 defoption test
 
+file syscall/proc_syscalls.c
+file syscall/file_syscalls.c
+
 ########################################
 #                                      #
 #              Test code               #

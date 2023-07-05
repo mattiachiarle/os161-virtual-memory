@@ -782,12 +782,16 @@ thread_exit(void)
 
 	cur = curthread;
 
+	struct proc *p = curproc;
+
 	/*
 	 * Detach from our process. You might need to move this action
 	 * around, depending on how your wait/exit works.
 	 */
+	if(p!=NULL){
 	proc_remthread(cur);
-
+	}
+	
 	/* Make sure we *are* detached (move this only if you're sure!) */
 	KASSERT(cur->t_proc == NULL);
 
