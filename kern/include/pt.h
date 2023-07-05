@@ -10,15 +10,17 @@ struct pt_entry
     pid_t pid;    // processID
     uint8_t ctl;  // some bits for control; from the lower:  Validity bit, Reference bit, isInTLB bit, ...
                  //  could be added other bits
+    // add a lock here
 } entr;
 
-// in future  and add lock. 
 struct ptInfo
 {
     struct pt_entry *pt; // our IPT
     int ptSize;          // IPT size, in number of pte
     paddr_t firstfreepaddr;
-} tommaso;
+    struct lock *ptlock;
+    
+} peps;
 
 /*
  * PT INIT
@@ -32,13 +34,14 @@ pt_init(void);
  * @param: virtual address that we want to access
  * @param: pid of the process that asks for the page
  *
- * @return: NULL if the requested page isn't stored in the page table,
+ * @return: -1 if the requested page isn't stored in the page table,
  * physical address otherwise
  */
 
 paddr_t pt_get_paddr(vaddr_t, pid_t);
 
-/*
+
+/*  THIS IS THE BIG WRAPPER OF ALL OTHER FUNCS
  * find the cur PID and calls getpaddr that returns something.
  * IF pt_get_paddr is !== -1 return the paddr
  * ELSE calls function findspace() that finds a free space in IPT.
@@ -64,7 +67,7 @@ paddr_t get_page(vaddr_t);
  *
  * @return: NULL in case of errors, physical address otherwise
  */
-paddr_t load_page(vaddr_t, pid_t);
+// paddr_t load_page(vaddr_t, pid_t);
 
 paddr_t find_victim();
 
