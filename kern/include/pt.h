@@ -1,9 +1,23 @@
+#include "types.h"
+
 /*
  * Data structure to handle the page table
+ * 
  */
-struct pt{
+struct pt_entry{  //this is an entry of our IPT
+    vaddr_t page;  //virt page in the frame
+    pid_t pid;    // processID 
+    uint8_t ctl;  //some bits for control; from the lower:  Validity bit, Reference bit, isInTLB bit, ...
+                    // could be added other bits
+}entr;
 
-};
+struct pt_entry *pt;  //our IPT
+int ptSize;   //IPT size, in number of pte
+
+/*
+* PT INIT
+*/
+void pt_init(void);
 
 /*
  * This function converts a logical address into a physical one.
