@@ -37,9 +37,11 @@
 
 #include <vm.h>
 #include "opt-dumbvm.h"
+#include "elf.h"
 
 struct vnode;
 
+#define PROJECT_STACKPAGES    18
 
 /*
  * Address space - data structure associated with the virtual memory
@@ -57,8 +59,17 @@ struct addrspace {
         paddr_t as_pbase2;
         size_t as_npages2;
         paddr_t as_stackpbase;
+        Elf_Phdr ph1;
+        Elf_Phdr ph2;
+        struct vnode *v;
 #else
-        /* Put stuff here for your VM system */
+        vaddr_t as_vbase1;
+        size_t as_npages1;
+        vaddr_t as_vbase2;
+        size_t as_npages2;
+        Elf_Phdr ph1;
+        Elf_Phdr ph2;
+        struct vnode *v;
 #endif
 };
 

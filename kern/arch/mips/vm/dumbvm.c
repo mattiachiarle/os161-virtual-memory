@@ -38,6 +38,11 @@
 #include <mips/tlb.h>
 #include <addrspace.h>
 #include <vm.h>
+#include "opt-test.h"
+
+#if OPT_TEST
+#include "swapfile.h"
+#endif
 
 /*
  * Dumb MIPS-only "VM system" that is intended to only be just barely
@@ -67,6 +72,9 @@ static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 void
 vm_bootstrap(void)
 {
+	#if OPT_TEST
+	swap_init();
+	#endif
 	/* Do nothing. */
 }
 
