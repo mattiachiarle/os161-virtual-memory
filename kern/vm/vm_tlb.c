@@ -1,7 +1,9 @@
+
 #include "vm_tlb.h"
 #include "tlb.h"
 #include "pt.h"
 #include "spl.h"
+#include "addrspace.h"
 /*
  * vm.h includes the definition of vm_fault, which is used to handle the
  * TLB misses
@@ -30,7 +32,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
         break;
     case VM_FAULT_READONLY:
         kprintf("You tried to write a readonly segment... The process is ending...");
-        //sys__exit(0);
+        sys__exit(0);
         break;
     
     default:
@@ -140,17 +142,3 @@ int tlb_invalidate_all(){
     }
 }
 
-int as_is_ok(){
-    struct addrspace as = proc_getas();
-    if(as == NULL)
-        return 0;
-    if(as->as_vbase1 == 0)
-        return 0;
-    if(as->as_vbase2 == 0)
-        return 0;
-    if(as->npages1 == 0)
-        return 0;
-    if(as->npages2 == 0)
-        return 0;
-    return 1;
-}

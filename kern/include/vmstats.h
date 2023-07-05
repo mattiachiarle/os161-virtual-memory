@@ -1,3 +1,5 @@
+#ifndef _VMSTATS_H_
+#define _VMSTATS_H_
 #include <types.h>
 #include <lib.h>
 #include <spinlock.h>
@@ -81,3 +83,4 @@ void add_pt_type_fault(int);
 void add_swap_writes(void);
 /*this function is called by vm_shutdown to display stats*/
 void print_stats(void);
+#endif

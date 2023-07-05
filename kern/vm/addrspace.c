@@ -179,4 +179,18 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 
 	return 0;
 }
+int as_is_ok(){
+    struct addrspace *as = proc_getas();
+    if(as == NULL)
+        return 0;
+    if(as->as_vbase1 == 0)
+        return 0;
+    if(as->as_vbase2 == 0)
+        return 0;
+    if(as->as_npages1 == 0)
+        return 0;
+    if(as->as_npages2 == 0)
+        return 0;
+    return 1;
+}
 

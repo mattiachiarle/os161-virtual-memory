@@ -139,5 +139,11 @@ int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);
 
 int load_elf(struct vnode *v, vaddr_t *entrypoint);
 
+/**
+ * this function checks if the as has been correcty set
+ * @return 0 if not ok
+ * @return 1 if ok
+ * */
+int as_is_ok();
 
 #endif /* _ADDRSPACE_H_ */
