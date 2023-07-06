@@ -1,3 +1,7 @@
+#ifndef _PT_H_
+#define _PT_H_
+
+
 #include "types.h"
 
 /*
@@ -38,7 +42,7 @@ pt_init(void);
  * physical address otherwise
  */
 
-paddr_t pt_get_paddr(vaddr_t, pid_t);
+int pt_get_paddr(vaddr_t, pid_t);
 
 
 /*  THIS IS THE BIG WRAPPER OF ALL OTHER FUNCS
@@ -69,7 +73,7 @@ paddr_t get_page(vaddr_t);
  */
 // paddr_t load_page(vaddr_t, pid_t);
 
-paddr_t find_victim();
+paddr_t find_victim(void);
 
 /*
  * This function frees all the pages of a process after its termination.
@@ -78,7 +82,9 @@ paddr_t find_victim();
  *
  * @return: -1 iin case of errors, 0 otherwise
  */
-int free_pages(pid_t);
+void free_pages(pid_t);
 
 
 int cabodi(vaddr_t);
+
+#endif

@@ -23,7 +23,7 @@ uint32_t tlb_fault_stats(void){
 }
 uint32_t tlb_type_fault_stats(int type){
     spinlock_acquire(&stat.lock);
-    uint32_t s;
+    uint32_t s=0;
     switch (type)
     {
     case FAULT_W_FREE:
@@ -54,7 +54,7 @@ uint32_t reloads_stat(void){
 
 uint32_t pt_fault_stats(int type){
     spinlock_acquire(&stat.lock);
-    uint32_t s;
+    uint32_t s=0;
     switch (type)
     {
     case ZEROED:

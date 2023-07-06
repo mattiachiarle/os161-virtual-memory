@@ -26,7 +26,7 @@ int lastIndex = 0; // for FIFO, need to check priorities: Ref. bit and TLB bit
 
 void pt_init(void)
 {
-    int numFrames, entInFrame, framesForPT;
+    int numFrames;
     // modify in order to take only locatable free space
     numFrames = mainbus_ramsize() / PAGE_SIZE; // get how many frames I have in RAM, remember: 1 IPT entry for each frame
     // the next one: how many entries in a frame, that is a ceil
@@ -49,6 +49,45 @@ void pt_init(void)
     }
 }
 
+static int findspace()
+{
+    int val = -1;
+    for (int i = 0; i < peps.ptSize; i++)
+    {
+        val = GETVALBIT(peps.pt[i].ctl); // 1 if validity bit=1
+        if (!val)
+        {
+            return i; // return the position of empty entry in PT
+        }
+    }
+    return -1;
+}
+
+// name is wrong --> select victim
+paddr_t find_victim(void)
+{
+    int i;
+    // if I am here there will be a replacement since all pages are valid
+    for (i = lastIndex;; i = (i + 1) % peps.ptSize)
+    {
+        // Val, Ref,TLB bits from low to high
+        if (GETTLBBIT(peps.pt[i].ctl) == 0) // if isInTLB = 0
+        {
+            if (GETREFBIT(peps.pt[i].ctl) == 0) // if Ref bit==0 victim found
+            {
+                peps.pt[i].ctl = TLBBITONE(peps.pt[i].ctl);  // set isINTLB to 1
+                lastIndex = i + 1;                          // new ptr for FIFO
+                return i * PAGE_SIZE + peps.firstfreepaddr; // return paddr of that frame
+            }
+            else
+            {                                                // found rb==1, so-->
+                peps.pt[i].ctl = REFBITZERO(peps.pt[i].ctl); // set RB to 0 and continue
+            }
+        }
+    }
+    panic("no victims! it's a problem...");
+}
+
 // some bits for control; from the lower:  Validity bit, Reference bit, isInTLB bit, ...
 //  bitStatus = (j >> n) & 1;
 
@@ -56,12 +95,14 @@ paddr_t get_page(vaddr_t v)
 {
 
     pid_t pid = proc_getpid(curproc); // get curpid here
+    int res;
     paddr_t pp;
     lock_acquire(peps.ptlock);
-    pp = pt_get_paddr(v, pid);
+    res = pt_get_paddr(v, pid);
 
-    if (pp != -1)
+    if (res != -1)
     {
+        pp = (paddr_t) res;
         add_tlb_reload();
         lock_release(peps.ptlock);
         return pp;
@@ -71,27 +112,16 @@ paddr_t get_page(vaddr_t v)
     {
         pp = find_victim();
     }
+    else{
+        pp = peps.firstfreepaddr + pos*PAGE_SIZE;
+    }
 
     load_page(v, pid, pp);
     lock_release(peps.ptlock);
     return pp;
 }
 
-int findspace()
-{
-    int validity = -1;
-    for (int i = 0; i < peps.ptSize; i++)
-    {
-        validity = GETVALBIT(peps.pt[i].ctl); // 1 if validity bit=1
-        if (!validity)
-        {
-            return i; // return the position of empty entry in PT
-        }
-    }
-    return -1;
-}
-
-paddr_t pt_get_paddr(vaddr_t v, pid_t p)
+int pt_get_paddr(vaddr_t v, pid_t p)
 {
     int validity;
 
@@ -111,32 +141,7 @@ paddr_t pt_get_paddr(vaddr_t v, pid_t p)
     return -1; // not found in PT in future PANIC!!
 }
 
-// name is wrong --> select victim
-paddr_t find_victim()
-{
-    int i;
-    // if I am here there will be a replacement since all pages are valid
-    for (i = lastIndex;; i = (i + 1) % peps.ptSize)
-    {
-        // Val, Ref,TLB bits from low to high
-        if (GETTLBBIT(peps.pt[i].ctl) == 0) // if isInTLB = 0
-        {
-            if (GETREFBIT(peps.pt[i].ctl) == 0) // if Ref bit==0 victim found
-            {
-                TLBBITONE(peps.pt[i].ctl);                  // set isINTLB to 1
-                lastIndex = i + 1;                          // new ptr for FIFO
-                return i * PAGE_SIZE + peps.firstfreepaddr; // return paddr of that frame
-            }
-            else
-            {                                                // found rb==1, so-->
-                peps.pt[i].ctl = REFBITZERO(peps.pt[i].ctl); // set RB to 0 and continue
-            }
-        }
-    }
-    panic("no victims! it's a problem...");
-}
-
-int free_pages(pid_t p)
+void free_pages(pid_t p)
 {
     for (int i = 0; i < peps.ptSize; i++)
     {
@@ -154,7 +159,7 @@ int cabodi(vaddr_t v)
     int i;
     for (i = 0; i < peps.ptSize; i++)
     {
-        if (peps.pt[i].page == v)
+        if (peps.pt[i].page == v && peps.pt[i].pid==pid)
         {
             KASSERT((peps.pt[i].ctl & 4));               // it must be inside TLB
             peps.pt[i].ctl = TLBBITZERO(peps.pt[i].ctl); // remove TLB bit

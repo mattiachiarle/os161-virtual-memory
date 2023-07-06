@@ -27,6 +27,8 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
             copyout(kbuf, (userptr_t)paddr, PAGE_SIZE);
             kfree(kbuf);
 
+            add_pt_type_fault(SWAPFILE);
+
             return 1;
         }
     }
@@ -44,6 +46,9 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
     for(i=0;i<swap->size; i++){
         if(swap->elements[i].pid==-1){
+
+            add_pt_type_fault(DISK);
+
             swap->elements[i].pid=pid;
             swap->elements[i].vaddr=vaddr;
             kbuf=kmalloc(PAGE_SIZE);
@@ -58,6 +63,8 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
             }
 
             kfree(kbuf);
+
+            add_swap_writes();
 
             return 1;
         }
@@ -105,5 +112,5 @@ void remove_process_from_swap(pid_t pid){
             swap->elements[i].pid=-1;
         }
     }
-    
+
 }

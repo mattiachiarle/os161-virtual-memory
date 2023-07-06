@@ -38,6 +38,7 @@
 
 
 #include <machine/vm.h>
+#include "types.h"
 
 /* Fault-type arguments to vm_fault() */
 #define VM_FAULT_READ        0    /* A read was attempted */

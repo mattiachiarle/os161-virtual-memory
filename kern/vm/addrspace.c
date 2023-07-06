@@ -56,6 +56,11 @@ as_create(void)
 	 * Initialize as needed.
 	 */
 
+	as->as_vbase1 = 0;
+	as->as_npages1 = 0;
+	as->as_vbase2 = 0;
+	as->as_npages2 = 0;
+
 	return as;
 }
 
@@ -73,7 +78,13 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	 * Write this.
 	 */
 
-	(void)old;
+	newas->as_vbase1 = old->as_vbase1;
+	newas->as_npages1 = old->as_npages1;
+	newas->as_vbase2 = old->as_vbase2;
+	newas->as_npages2 = old->as_npages2;
+
+	//TBD copy swap pages
+	//TBD copy page table pages
 
 	*ret = newas;
 	return 0;
@@ -82,9 +93,14 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 void
 as_destroy(struct addrspace *as)
 {
+	struct proc *proc = curproc;
+
 	/*
 	 * Clean up as needed.
 	 */
+
+	free_pages(proc->p_pid);
+	remove_process_from_swap(proc->p_pid);
 
 	kfree(as);
 }
@@ -132,16 +148,43 @@ int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 		 int readable, int writeable, int executable)
 {
-	/*
-	 * Write this.
-	 */
+	size_t npages;
 
-	(void)as;
-	(void)vaddr;
-	(void)memsize;
+	/* Align the region. First, the base... */
+	memsize += vaddr & ~(vaddr_t)PAGE_FRAME;
+	vaddr &= PAGE_FRAME;
+
+	/* ...and now the length. */
+	memsize = (memsize + PAGE_SIZE - 1) & PAGE_FRAME;
+
+	npages = memsize / PAGE_SIZE;
+
+	/* We don't use these - all pages are read-write */
 	(void)readable;
 	(void)writeable;
 	(void)executable;
+
+	if (as->as_vbase1 == 0) {
+		as->as_vbase1 = vaddr;
+		as->as_npages1 = npages;
+		return 0;
+	}
+
+	if (as->as_vbase2 == 0) {
+		as->as_vbase2 = vaddr;
+		as->as_npages2 = npages;
+		return 0;
+	}
+
+	/*
+	 * Support for more than two regions is not available.
+	 */
+	(void)readable;
+	(void)writeable;
+	(void)executable;
+
+	kprintf("dumbvm: Warning: too many regions\n");
+
 	return ENOSYS;
 }
 

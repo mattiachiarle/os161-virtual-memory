@@ -447,3 +447,7 @@ file		test/fstest.c
 optfile net	test/nettest.c
 file        vm/segments.c
 file        vm/swapfile.c
+file        vm/vmstats.c
+file        vm/coremap.c
+file        vm/pt.c
+file        vm/vm_tlb.c

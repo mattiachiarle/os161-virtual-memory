@@ -7,6 +7,7 @@
 #include "spinlock.h"
 
 static int numFrames = 0;
+static int bitmapactive = 0; // bitmap non active
 
 void bitmap_init(void)
 {
@@ -32,7 +33,7 @@ int is_bitmap_active(void){
     return bitmapactive;
 }
 
-void bitmap_destroy(void){  //destroys bitmap structure
+void destroy_bitmap(void){  //destroys bitmap structure
     
     //acquire protection
     bitmapactive=0;

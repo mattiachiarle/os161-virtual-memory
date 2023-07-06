@@ -78,7 +78,6 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
     int swap, result;
     struct addrspace *as;
     int sz=PAGE_SIZE;
-	//void *kbuf;
 
 	as = proc_getas();
 
@@ -92,10 +91,12 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
     //text segment
     if(vaddr>=as->as_vbase1 && vaddr <= as->as_vbase1 + as->as_npages1 * PAGE_SIZE ){
+
+		add_pt_type_fault(DISK);
+
         if(as->ph1.p_memsz<PAGE_SIZE){
             sz=as->ph1.p_memsz;
         }
-		//kbuf=kmalloc(sz);
         result = load_elf_page(as, as->v, as->ph1.p_offset, as->ph1.p_vaddr,
 				      sz, sz,
 				      as->ph1.p_flags & PF_X);
@@ -106,12 +107,17 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 		as->ph1.p_vaddr+=PAGE_SIZE;
         as->ph1.p_memsz -= sz;
         as->ph1.p_filesz -= sz;
-		//kfree(kbuf);
+
+		add_pt_type_fault(ELF);
+
         return 0;
     }
 
     //data segment
     if(vaddr>=as->as_vbase2 && vaddr <= as->as_vbase2 + as->as_npages2 * PAGE_SIZE ){
+
+		add_pt_type_fault(DISK);
+
 		if(as->ph2.p_memsz<PAGE_SIZE){
             sz=as->ph2.p_memsz;
         }
@@ -125,6 +131,9 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 		as->ph2.p_vaddr+=PAGE_SIZE;
 		as->ph2.p_memsz -= sz;
         as->ph2.p_filesz -= sz;
+
+		add_pt_type_fault(ELF);
+
         return 0;
     }
 
@@ -133,6 +142,9 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
     if(vaddr<=USERSTACK){
         //this time we just 0-fill the page, so no need to perform any kind of load.
         bzero((void *)paddr, PAGE_SIZE);
+
+		add_pt_type_fault(ZEROED);
+
         return 0;
     }
 

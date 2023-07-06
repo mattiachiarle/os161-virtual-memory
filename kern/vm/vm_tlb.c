@@ -1,9 +1,10 @@
 
 #include "vm_tlb.h"
-#include "tlb.h"
+#include "mips/tlb.h"
 #include "pt.h"
 #include "spl.h"
 #include "addrspace.h"
+#include "opt-dumbvm.h"
 /*
  * vm.h includes the definition of vm_fault, which is used to handle the
  * TLB misses
@@ -15,6 +16,8 @@ int tlb_remove(void){
     return -1;
 }
 
+
+#if !OPT_DUMBVM
 int vm_fault(int faulttype, vaddr_t faultaddress){
     paddr_t paddr;
     int spl = splhigh(); // so that the control does nit pass to another waiting process.
@@ -47,6 +50,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     splx(spl);
     return 0;
 }
+#endif
 
 int tlb_victim(void){
     /*atm, RR strategy*/
@@ -136,7 +140,7 @@ int tlb_invalidate_entry(paddr_t paddr){
     return 0;
 }
 
-int tlb_invalidate_all(){
+void tlb_invalidate_all(void){
     for(int i = 0; i<NUM_TLB; i++){
             tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
     }

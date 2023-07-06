@@ -141,6 +141,7 @@ vm_tlbshootdown(const struct tlbshootdown *ts)
 	panic("dumbvm tried to do tlb shootdown?!\n");
 }
 
+#if OPT_DUMBVM
 int
 vm_fault(int faulttype, vaddr_t faultaddress)
 {
@@ -241,6 +242,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	splx(spl);
 	return EFAULT;
 }
+#endif
 
 struct addrspace *
 as_create(void)

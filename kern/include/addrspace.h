@@ -38,6 +38,10 @@
 #include <vm.h>
 #include "opt-dumbvm.h"
 #include "elf.h"
+#include "pt.h"
+#include "vm_tlb.h"
+#include "swapfile.h"
+#include "current.h"
 
 struct vnode;
 

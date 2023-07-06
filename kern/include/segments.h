@@ -16,6 +16,7 @@
 #include <addrspace.h>
 #include <vnode.h>
 #include <elf.h>
+#include "vmstats.h"
 
 /*
  * Given the virtual address vaddr, it finds the corresponding page and it loads it into the provided paddr.

@@ -1,5 +1,10 @@
 #ifndef _VM_TLB_H_
 #define _VM_TLB_H_
+
+#include "types.h"
+#include "syscall.h"
+#include "proc.h"
+
 /*
  * Data structure to manage the algorithm used in tlb_remove.
  *
@@ -47,7 +52,7 @@ int tlb_invalidate_entry(paddr_t paddr);
 /**
  * this function invalidates the whole tlb
 */
-int tlb_invalidate_all();
+void tlb_invalidate_all(void);
 
 
 #endif

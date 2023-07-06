@@ -9,6 +9,7 @@
 #include "copyinout.h"
 #include "lib.h"
 #include "vfs.h"
+#include "vmstats.h"
 
 /*
  * Data structure to store the association 
