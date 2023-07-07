@@ -18,6 +18,9 @@
 #include <mips/trapframe.h>
 #include <current.h>
 #include <synch.h>
+#include "swapfile.h"
+#include "pt.h"
+#include "opt-project.h"
 
 /*
  * system calls for process management
@@ -28,6 +31,12 @@ sys__exit(int status)
   struct proc *p = curproc;
   p->p_status = status & 0xff; /* just lower 8 bits returned */
   proc_remthread(curthread);
+
+  #if OPT_PROJECT
+  remove_process_from_swap(p->p_pid);
+  free_pages(p->p_pid);
+  #endif
+
   lock_acquire(p->lock);
   cv_signal(p->p_cv, p->lock);
   lock_release(p->lock);

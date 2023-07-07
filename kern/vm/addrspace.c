@@ -166,12 +166,14 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	(void)executable;
 
 	if (as->as_vbase1 == 0) {
+		//kprintf("Text starts at: 0x%x\n",vaddr);
 		as->as_vbase1 = vaddr;
 		as->as_npages1 = npages;
 		return 0;
 	}
 
 	if (as->as_vbase2 == 0) {
+		//kprintf("Data starts at: 0x%x\n",vaddr);
 		as->as_vbase2 = vaddr;
 		as->as_npages2 = npages;
 		return 0;
@@ -180,10 +182,6 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	/*
 	 * Support for more than two regions is not available.
 	 */
-	(void)readable;
-	(void)writeable;
-	(void)executable;
-
 	kprintf("dumbvm: Warning: too many regions\n");
 
 	return ENOSYS;
@@ -242,8 +240,8 @@ int as_is_ok(){
 }
 
 void vm_bootstrap(void){
-	swap_init();
 	pt_init();
+	swap_init();
 }
 
 void vm_tlbshootdown(const struct tlbshootdown *ts){

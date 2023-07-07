@@ -21,6 +21,9 @@ int tlb_remove(void){
 #if !OPT_DUMBVM
 int vm_fault(int faulttype, vaddr_t faultaddress){
 
+    // if(faultaddress >= 0x412000)
+    //     kprintf("TLB miss for 0x%x\n",faultaddress);
+
     //print_tlb();
 
     //kprintf("\nfault address: 0x%x\n",faultaddress);
@@ -127,7 +130,7 @@ int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
     cabodi(prevHi);
     tlb_write(hi, lo, entry);
     /*update tlb faults replace*/
-    add_pt_type_fault(FAULT_W_REPLACE);
+    add_tlb_type_fault(FAULT_W_REPLACE);
     return 0;
 
 }

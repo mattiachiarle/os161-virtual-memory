@@ -2,9 +2,14 @@
 
 #define MAX_SIZE 9*1024*1024
 
+static int nread=0;
+static int nwrite=0;
+
 struct swapfile *swap;
 
 int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
+
+    nread++;
 
     //kprintf("\nLOAD SWAP");
 
@@ -15,13 +20,18 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
     for(i=0;i<swap->size; i++){
         if(swap->elements[i].pid==pid && swap->elements[i].vaddr==vaddr){
+            add_pt_type_fault(DISK);
+
             swap->elements[i].pid=-1;
+
+            // kprintf("SWAP: Loading into RAM %lu bytes to 0x%lx (offset in swapfile : 0x%lx)\n",
+	        //     (unsigned long) PAGE_SIZE, (unsigned long) paddr, (unsigned long) i*PAGE_SIZE);
             
             uio_kinit(&iov,&ku,(void*)PADDR_TO_KVADDR(paddr),PAGE_SIZE,i*PAGE_SIZE,UIO_READ);
 
             result = VOP_READ(swap->v,&ku);
             if(result){
-                panic("VOP_READ in swapfile failed, with result=%d",result);
+                panic("VOP_READ in swapfile failed, with result=%d, after %d reads and %d writes",result, nread, nwrite);
             }
 
             add_pt_type_fault(SWAPFILE);
@@ -35,6 +45,8 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
 int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
+    nwrite++;
+
     //kprintf("\nSTORE SWAP");
 
     size_t i;
@@ -45,7 +57,11 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
     for(i=0;i<swap->size; i++){
         if(swap->elements[i].pid==-1){
 
-            add_pt_type_fault(DISK);
+            // void *kbuf;
+            //kbuf=kmalloc(PAGE_SIZE);
+
+            // kprintf("SWAP: Loading from RAM %lu bytes from 0x%lx (offset in swapfile : 0x%lx)\n",
+	        //     (unsigned long) PAGE_SIZE, (unsigned long) paddr, (unsigned long) i*PAGE_SIZE);
 
             swap->elements[i].pid=pid;
             swap->elements[i].vaddr=vaddr;
@@ -54,9 +70,10 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
             result = VOP_WRITE(swap->v,&ku);
             if(result){
-                panic("VOP_WRITE in swapfile failed, with result=%d",result);
+                panic("VOP_WRITE in swapfile failed, with result=%d, after %d reads and %d writes",result, nread, nwrite);
             }
 
+            //kfree(kbuf);
 
             add_swap_writes();
 

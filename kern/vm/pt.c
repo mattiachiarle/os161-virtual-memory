@@ -123,14 +123,14 @@ paddr_t get_page(vaddr_t v)
     pid_t pid = proc_getpid(curproc); // get curpid here
     int res;
     paddr_t pp;
-    //lock_acquire(peps.ptlock);
+    lock_acquire(peps.ptlock);
     res = pt_get_paddr(v, pid);
 
     if (res != -1)
     {
         pp = (paddr_t) res;
         add_tlb_reload();
-        //lock_release(peps.ptlock);
+        lock_release(peps.ptlock);
         return pp;
     }
     int pos = findspace(v,pid); // find a free space
@@ -149,7 +149,7 @@ paddr_t get_page(vaddr_t v)
 
     load_page(v, pid, pp);
     
-    //lock_release(peps.ptlock);
+    lock_release(peps.ptlock);
 
     return pp;
 }
@@ -230,12 +230,33 @@ paddr_t get_contiguous_pages(int npages){
     }
 
     //MISSING: KMALLOC WITH FULL PAGE TABLE
-    //fake implementation just for testing
-    // for(i=0;i<npages;i++){
 
-    // }
-
-
+    for (i = lastIndex;; i = (i + 1) % peps.ptSize)
+    {
+        // Val, Ref,TLB bits from low to high
+        if (peps.pt[i].page!=KMALLOC_PAGE && GETTLBBIT(peps.pt[i].ctl) == 0) // if isInTLB = 0
+        {
+            if ((GETREFBIT(peps.pt[i].ctl) == 0 || GETVALBIT(peps.pt[i].ctl) == 0) && (i==0 || (GETREFBIT(peps.pt[i-1].ctl) != 0 && GETVALBIT(peps.pt[i-1].ctl) != 0)))
+            {
+                first = i;
+            }
+            if((GETREFBIT(peps.pt[i].ctl) == 0 || GETVALBIT(peps.pt[i].ctl) == 0) && i-first==npages-1){
+                for(j=first;j<=i;j++){
+                    if(GETVALBIT(peps.pt[i].ctl) == 1){
+                        store_swap(peps.pt[i].page,peps.pt[i].pid,i * PAGE_SIZE + peps.firstfreepaddr);
+                    }
+                    peps.pt[j].ctl = VALBITONE(j); //Set pages as valid
+                    peps.pt[j].page = KMALLOC_PAGE;
+                    lastIndex = (i + 1) % peps.ptSize;
+                }
+                peps.contiguous[first]=npages;
+                return first*PAGE_SIZE + peps.firstfreepaddr;
+            }
+            if(GETREFBIT(peps.pt[i].ctl) == 1 && GETVALBIT(peps.pt[i].ctl) == 1){
+                peps.pt[i].ctl = REFBITZERO(peps.pt[i].ctl);
+            }
+        }
+    }
 
     return ENOMEM;
 }
@@ -251,6 +272,7 @@ void free_contiguous_pages(vaddr_t addr){
 
     for(i=index;i<index+niter;i++){
         peps.pt[i].ctl = VALBITZERO(i);
+        peps.pt[i].page=0;
     }
 
     peps.contiguous[index]=-1;
