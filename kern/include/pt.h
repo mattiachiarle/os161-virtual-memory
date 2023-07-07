@@ -3,6 +3,10 @@
 
 
 #include "types.h"
+#include "addrspace.h"
+#include "kern/errno.h"
+
+int pt_active;
 
 /*
  * Data structure to handle the page table
@@ -23,7 +27,7 @@ struct ptInfo
     int ptSize;          // IPT size, in number of pte
     paddr_t firstfreepaddr;
     struct lock *ptlock;
-    
+    int *contiguous;
 } peps;
 
 /*
@@ -73,7 +77,7 @@ paddr_t get_page(vaddr_t);
  */
 // paddr_t load_page(vaddr_t, pid_t);
 
-paddr_t find_victim(void);
+paddr_t find_victim(vaddr_t, pid_t);
 
 /*
  * This function frees all the pages of a process after its termination.
@@ -86,5 +90,11 @@ void free_pages(pid_t);
 
 
 int cabodi(vaddr_t);
+
+paddr_t get_contiguous_pages(int);
+
+void free_contiguous_pages(vaddr_t);
+
+void pt_reset_tlb(void);
 
 #endif

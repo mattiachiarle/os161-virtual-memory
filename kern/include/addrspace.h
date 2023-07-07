@@ -44,8 +44,11 @@
 #include "current.h"
 
 struct vnode;
+#if !OPT_DUMBVM
+struct spinlock stealmem_lock;
+#endif
 
-#define PROJECT_STACKPAGES    18
+#define DUMBVM_STACKPAGES    18
 
 /*
  * Address space - data structure associated with the virtual memory
@@ -71,6 +74,7 @@ struct addrspace {
         size_t as_npages1;
         vaddr_t as_vbase2;
         size_t as_npages2;
+        paddr_t as_stackpbase;
         Elf_Phdr ph1;
         Elf_Phdr ph2;
         struct vnode *v;
@@ -148,6 +152,13 @@ int load_elf(struct vnode *v, vaddr_t *entrypoint);
  * @return 0 if not ok
  * @return 1 if ok
  * */
-int as_is_ok();
+int as_is_ok(void);
+
+void vm_bootstrap(void);
+void vm_shutdown(void);
+void vm_tlbshootdown(const struct tlbshootdown *ts);
+vaddr_t alloc_kpages(unsigned npages);
+void free_kpages(vaddr_t addr);
+void addrspace_init(void);
 
 #endif /* _ADDRSPACE_H_ */

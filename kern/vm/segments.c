@@ -11,36 +11,54 @@ load_elf_page(struct addrspace *as, struct vnode *v,
 	struct uio u;
 	int result;
 
+	(void)as;
+	(void)is_executable;
+
+	#if OPT_TEST
+	void *kbuf;
+	#endif
+
 	if (filesize > memsize) {
 		kprintf("ELF: warning: segment filesize > segment memsize\n");
 		filesize = memsize;
 	}
 
-	kprintf("ELF: Loading %lu bytes to 0x%lx\n",
+	kprintf("ELF: Loading %lu bytes to 0x%lx",
 	      (unsigned long) filesize, (unsigned long) vaddr);
 
-	//uio_kinit(&iov, &u, kbuf, memsize, offset, UIO_READ);
-
+	#if OPT_TEST
+	uio_kinit(&iov, &u, kbuf, memsize, offset, UIO_READ);
+	#else
 	iov.iov_ubase = (userptr_t)vaddr;
 	iov.iov_len = memsize;		 // length of the memory space
 	u.uio_iov = &iov;
 	u.uio_iovcnt = 1;
 	u.uio_resid = filesize;          // amount to read from the file
 	u.uio_offset = offset;
-	u.uio_segflg = is_executable ? UIO_USERISPACE : UIO_USERSPACE;
+	u.uio_segflg = UIO_SYSSPACE;
 	u.uio_rw = UIO_READ;
-	u.uio_space = as;
+	u.uio_space = NULL;
+	#endif
 
+	#if OPT_TEST
 	result = VOP_READ(v, &u);
+	#else
+	result = VOP_READ(v, &u);
+	#endif
+
 	if (result) {
 		return result;
 	}
 
-	if (u.uio_resid != 0) {
-		/* short read; problem with executable? */
-		kprintf("ELF: short read on segment - file truncated?\n");
-		return ENOEXEC;
-	}
+	// if (u.uio_resid != 0) {
+	// 	/* short read; problem with executable? */
+	// 	kprintf("ELF: short read on segment - file truncated?\n");
+	// 	return ENOEXEC;
+	// }
+
+	#if OPT_TEST
+	copyout();
+	#endif
 
 	/*
 	 * If memsize > filesize, the remaining space should be
@@ -92,19 +110,22 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
     //text segment
     if(vaddr>=as->as_vbase1 && vaddr <= as->as_vbase1 + as->as_npages1 * PAGE_SIZE ){
 
+		kprintf("\nLOADING CODE: ");
+
 		add_pt_type_fault(DISK);
 
         if(as->ph1.p_memsz<PAGE_SIZE){
+			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);
             sz=as->ph1.p_memsz;
         }
-        result = load_elf_page(as, as->v, as->ph1.p_offset, as->ph1.p_vaddr,
+        result = load_elf_page(as, as->v, as->ph1.p_offset, PADDR_TO_KVADDR(paddr),
 				      sz, sz,
 				      as->ph1.p_flags & PF_X);
 		if (result) {
             panic("Error while reading the text segment");
 		}
         as->ph1.p_offset+=PAGE_SIZE;
-		as->ph1.p_vaddr+=PAGE_SIZE;
+		//as->ph1.p_vaddr+=PAGE_SIZE;
         as->ph1.p_memsz -= sz;
         as->ph1.p_filesz -= sz;
 
@@ -116,19 +137,22 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
     //data segment
     if(vaddr>=as->as_vbase2 && vaddr <= as->as_vbase2 + as->as_npages2 * PAGE_SIZE ){
 
+		kprintf("\nLOADING DATA: ");
+
 		add_pt_type_fault(DISK);
 
 		if(as->ph2.p_memsz<PAGE_SIZE){
+			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);
             sz=as->ph2.p_memsz;
         }
-        result = load_elf_page(as, as->v, as->ph2.p_offset, as->ph2.p_vaddr,
+        result = load_elf_page(as, as->v, as->ph2.p_offset, PADDR_TO_KVADDR(paddr),
 				      PAGE_SIZE, PAGE_SIZE,
 				      as->ph2.p_flags & PF_X);
 		if (result) {
             panic("Error while reading the data segment");
 		}
         as->ph2.p_offset+=PAGE_SIZE;
-		as->ph2.p_vaddr+=PAGE_SIZE;
+		//as->ph2.p_vaddr+=PAGE_SIZE;
 		as->ph2.p_memsz -= sz;
         as->ph2.p_filesz -= sz;
 
@@ -140,9 +164,14 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
     //stack segment
     //the check is performed in this way since the stack grows up from 0x80000000
     if(vaddr<=USERSTACK){
-        //this time we just 0-fill the page, so no need to perform any kind of load.
-        bzero((void *)paddr, PAGE_SIZE);
 
+		kprintf("\nLOADING STACK: ");
+
+		kprintf("ELF: Loading 4096 bytes to 0x%lx\n",
+	      (unsigned long) vaddr);
+
+        //this time we just 0-fill the page, so no need to perform any kind of load.
+        bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);
 		add_pt_type_fault(ZEROED);
 
         return 0;

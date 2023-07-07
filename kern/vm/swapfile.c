@@ -6,26 +6,23 @@ struct swapfile *swap;
 
 int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
+    //kprintf("\nLOAD SWAP");
+
     size_t i;
     int result;
-    void *kbuf;
     struct iovec iov;
     struct uio ku;
 
     for(i=0;i<swap->size; i++){
         if(swap->elements[i].pid==pid && swap->elements[i].vaddr==vaddr){
             swap->elements[i].pid=-1;
-            kbuf=kmalloc(PAGE_SIZE);
             
-            uio_kinit(&iov,&ku,kbuf,PAGE_SIZE,i*PAGE_SIZE,UIO_READ);
+            uio_kinit(&iov,&ku,(void*)PADDR_TO_KVADDR(paddr),PAGE_SIZE,i*PAGE_SIZE,UIO_READ);
 
             result = VOP_READ(swap->v,&ku);
             if(result){
                 panic("VOP_READ in swapfile failed, with result=%d",result);
             }
-
-            copyout(kbuf, (userptr_t)paddr, PAGE_SIZE);
-            kfree(kbuf);
 
             add_pt_type_fault(SWAPFILE);
 
@@ -38,9 +35,10 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
 int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
+    //kprintf("\nSTORE SWAP");
+
     size_t i;
     int result;
-    void *kbuf;
     struct iovec iov;
     struct uio ku;
 
@@ -51,18 +49,14 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
             swap->elements[i].pid=pid;
             swap->elements[i].vaddr=vaddr;
-            kbuf=kmalloc(PAGE_SIZE);
-
-            copyin((userptr_t)paddr,kbuf,PAGE_SIZE);
             
-            uio_kinit(&iov,&ku,kbuf,PAGE_SIZE,i*PAGE_SIZE,UIO_WRITE);
+            uio_kinit(&iov,&ku,(void*)PADDR_TO_KVADDR(paddr),PAGE_SIZE,i*PAGE_SIZE,UIO_WRITE);
 
             result = VOP_WRITE(swap->v,&ku);
             if(result){
                 panic("VOP_WRITE in swapfile failed, with result=%d",result);
             }
 
-            kfree(kbuf);
 
             add_swap_writes();
 

@@ -54,5 +54,7 @@ int tlb_invalidate_entry(paddr_t paddr);
 */
 void tlb_invalidate_all(void);
 
+void print_tlb(void);
+
 
 #endif

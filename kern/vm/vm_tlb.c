@@ -5,6 +5,7 @@
 #include "spl.h"
 #include "addrspace.h"
 #include "opt-dumbvm.h"
+#include "opt-test.h"
 /*
  * vm.h includes the definition of vm_fault, which is used to handle the
  * TLB misses
@@ -19,12 +20,20 @@ int tlb_remove(void){
 
 #if !OPT_DUMBVM
 int vm_fault(int faulttype, vaddr_t faultaddress){
+
+    //print_tlb();
+
+    //kprintf("\nfault address: 0x%x\n",faultaddress);
     paddr_t paddr;
-    int spl = splhigh(); // so that the control does nit pass to another waiting process.
+    uint32_t mask = PAGE_FRAME, addr, res;
+
+    addr = (uint32_t) faultaddress;
+
+    res = addr & mask; // do I ?
+
     /*I update the statistics*/
     add_tlb_fault();
     /*I extract the virtual address of the corresponding page*/
-    faultaddress &= PAGE_FRAME; // do I ?
     switch (faulttype)
     {
     case VM_FAULT_READ:
@@ -45,12 +54,13 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     /*did mattia set up the as correctly?*/
     KASSERT(as_is_ok() == 1);
 
-    paddr = get_page(faultaddress);
-    tlb_insert(faultaddress, paddr);
+    paddr = get_page(res);
+    int spl = splhigh(); // so that the control does nit pass to another waiting process.
+    tlb_insert(res, paddr);
     splx(spl);
     return 0;
 }
-#endif
+#endif 
 
 int tlb_victim(void){
     /*atm, RR strategy*/
@@ -84,6 +94,9 @@ int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
     for(entry = 0; entry <NUM_TLB; entry++){
         valid = tlb_entry_is_valid(entry);
         if(!valid){
+            // if(entry==0){
+            //     pt_reset_tlb();
+            // }
             /*I can write the fault address here! that's a match,,,*/
                 hi = faultvaddr;
                 lo = faultpaddr | TLBLO_VALID;
@@ -141,8 +154,26 @@ int tlb_invalidate_entry(paddr_t paddr){
 }
 
 void tlb_invalidate_all(void){
+    uint32_t hi, lo;
+    add_tlb_invalidation();
     for(int i = 0; i<NUM_TLB; i++){
+            if(tlb_entry_is_valid(i)){
+                tlb_read(&hi,&lo,i);
+                cabodi(hi);
+            }
             tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
     }
+}
+
+void print_tlb(void){
+    uint32_t hi, lo;
+
+    kprintf("\n\n\tTLB\n\n");
+
+    for(int i = 0; i<NUM_TLB; i++){
+        tlb_read(&hi, &lo, i);
+        kprintf("%d virtual: 0x%x, physical: 0x%x\n", i, hi, lo);
+    }
+
 }
 

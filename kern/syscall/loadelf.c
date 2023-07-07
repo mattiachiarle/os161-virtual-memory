@@ -81,7 +81,7 @@
  * explicitly.
  */
 
-#if !OPT_TEST
+#if OPT_DUMBVM&&!OPT_TEST
 static
 int
 load_segment(struct addrspace *as, struct vnode *v,
@@ -169,7 +169,7 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 	struct uio ku;
 	struct addrspace *as;
 
-	#if OPT_TEST
+	#if OPT_TEST && OPT_DUMBVM
 	paddr_t paddr=0;
 	#endif
 

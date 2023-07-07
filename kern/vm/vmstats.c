@@ -151,7 +151,7 @@ void print_stats(void){
     uint32_t faults, free_faults, replace_faults, invalidations, reloads,
              pf_zeroed, pf_disk, pf_elf, pf_swap,
              swap_writes;
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     /*TLB stats*/
     faults = tlb_fault_stats();
     free_faults = tlb_type_fault_stats(FAULT_W_FREE);
@@ -165,13 +165,13 @@ void print_stats(void){
     pf_swap = pt_fault_stats(SWAPFILE);
     /*swap writes*/
     swap_writes = swap_write_stat();
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
     /*print statistics and errors if present*/
-    kprintf("TLB stats: TLB faults = %d\t TLB Faults with Free = %d\tTLB Faults with Replace = %d\tTLB Invalidations = %d\tTLB Reloads%d\n", 
+    kprintf("TLB stats: TLB faults = %d\tTLB Faults with Free = %d\tTLB Faults with Replace = %d\tTLB Invalidations = %d\tTLB Reloads = %d\n", 
             faults, free_faults, replace_faults, invalidations, reloads);
     kprintf("PT stats: Page Faults(Zeroed) = %d\tPage Faults(Disk) = %d\tPage Faults from Elf = %d\tPage Faults from Swapfile = %d\n", 
             pf_zeroed, pf_disk, pf_elf, pf_swap);
-    kprintf("Swapfile writes: %d\n", swap_writes);
+    kprintf("Swapfile writes = %d\n", swap_writes);
     if(faults!=(free_faults + replace_faults))
         kprintf("ERROR-constraint1: sum of TLB Faults with Free and TLB faults with replace should be equal to TLB Faults\n");
     if((reloads+pf_disk+pf_zeroed) != faults)

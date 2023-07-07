@@ -141,10 +141,24 @@ vm_tlbshootdown(const struct tlbshootdown *ts)
 	panic("dumbvm tried to do tlb shootdown?!\n");
 }
 
+void print_tlb(void){
+    uint32_t hi, lo;
+
+    kprintf("\n\n\tTLB\n\n");
+
+    for(int i = 0; i<NUM_TLB; i++){
+        tlb_read(&hi, &lo, i);
+        kprintf("%d virtual: 0x%x, physical: 0x%x\n", i, hi, lo);
+    }
+
+}
+
 #if OPT_DUMBVM
 int
 vm_fault(int faulttype, vaddr_t faultaddress)
 {
+
+	//print_tlb();
 	vaddr_t vbase1, vtop1, vbase2, vtop2, stackbase, stacktop;
 	paddr_t paddr;
 	int i;

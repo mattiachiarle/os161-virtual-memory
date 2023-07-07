@@ -110,6 +110,26 @@ ram_stealmem(unsigned long npages)
 }
 
 /*
+* DO WE NEED IT? 
+* Cost: an additional vector of int
+* Pro: no memory leaks (but would they happen? Is it worth it? Probably no).
+*/
+
+// paddr_t
+// ram_freemem(unsigned long npages)
+// {
+// 	size_t size;
+// 	paddr_t paddr;
+
+// 	size = npages * PAGE_SIZE;
+
+// 	paddr = firstpaddr;
+// 	firstpaddr -= size;
+
+// 	return paddr;
+// }
+
+/*
  * This function is intended to be called by the VM system when it
  * initializes in order to find out what memory it has available to
  * manage. Physical memory begins at physical address 0 and ends with

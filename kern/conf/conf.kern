@@ -425,6 +425,7 @@ defoption netfs
 #
 
 defoption test
+defoption project
 
 file syscall/proc_syscalls.c
 file syscall/file_syscalls.c
@@ -448,6 +449,6 @@ optfile net	test/nettest.c
 file        vm/segments.c
 file        vm/swapfile.c
 file        vm/vmstats.c
-file        vm/coremap.c
-file        vm/pt.c
-file        vm/vm_tlb.c
+optfile project       vm/coremap.c
+optfile project      vm/pt.c
+optfile project       vm/vm_tlb.c

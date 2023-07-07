@@ -60,6 +60,7 @@ as_create(void)
 	as->as_npages1 = 0;
 	as->as_vbase2 = 0;
 	as->as_npages2 = 0;
+	as->as_stackpbase = 0;
 
 	return as;
 }
@@ -224,6 +225,7 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 
 	return 0;
 }
+
 int as_is_ok(){
     struct addrspace *as = proc_getas();
     if(as == NULL)
@@ -239,3 +241,64 @@ int as_is_ok(){
     return 1;
 }
 
+void vm_bootstrap(void){
+	swap_init();
+	pt_init();
+}
+
+void vm_tlbshootdown(const struct tlbshootdown *ts){
+	(void)ts;
+	panic("dumbvm tried to do tlb shootdown?!\n");
+}
+
+void vm_shutdown(void){
+	print_stats();
+}
+
+static
+paddr_t
+getppages(unsigned long npages)
+{
+	paddr_t addr;
+
+	addr = ram_stealmem(npages);
+
+	return addr;
+}
+
+vaddr_t alloc_kpages(unsigned npages){
+	paddr_t p;
+
+	spinlock_acquire(&stealmem_lock);
+	
+	if(!pt_active){
+		p = getppages(npages);
+	}
+	else{
+		p = get_contiguous_pages(npages);
+	}
+
+	spinlock_release(&stealmem_lock);
+
+	return PADDR_TO_KVADDR(p);
+}
+
+void free_kpages(vaddr_t addr){
+
+	spinlock_acquire(&stealmem_lock);
+
+	if(!pt_active){
+		//Currently we accept a memory leak since the cost of having an additional data structure would be more expensive than the potential memory leaks that could occur
+		//Alternative: move contiguous in another place (coremap.c?)
+	}
+	else{
+		free_contiguous_pages(addr);
+	}
+
+	spinlock_release(&stealmem_lock);
+}
+
+void addrspace_init(void){
+	spinlock_init(&stealmem_lock);
+	pt_active=0;
+}

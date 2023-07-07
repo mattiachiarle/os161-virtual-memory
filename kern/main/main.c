@@ -50,6 +50,11 @@
 #include <test.h>
 #include <version.h>
 #include "autoconf.h"  // for pseudoconfig
+#include "opt-dumbvm.h"
+
+#if !OPT_DUMBVM
+#include "addrspace.h"
+#endif
 
 
 /*
@@ -105,6 +110,10 @@ boot(void)
 		GROUP_VERSION, buildconfig, buildversion);
 	kprintf("\n");
 
+	#if !OPT_DUMBVM
+	addrspace_init();
+	#endif
+
 	/* Early initialization. */
 	ram_bootstrap();
 	proc_bootstrap();
@@ -149,6 +158,10 @@ shutdown(void)
 {
 
 	kprintf("Shutting down.\n");
+
+	#if !OPT_DUMBVM
+	vm_shutdown();
+	#endif
 
 	vfs_clearbootfs();
 	vfs_clearcurdir();
