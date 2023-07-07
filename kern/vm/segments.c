@@ -1,18 +1,26 @@
 #include "segments.h"
 
+/**
+ * This function reads a page from the elf file into the provided virtual address.
+ * 
+ * @param v; the vnode of the elf file
+ * @param offset: the offset used inside the elf file
+ * @param vaddr: the virtual address in which we can store the read data
+ * @param memsize: the amount of memory to read
+ * @param filesize: the amount of memory to read
+ * 
+ * @return 0 if everything goes fine, otherwise the error code returned from VOP_READ
+ * 
+*/
 static
 int
-load_elf_page(struct addrspace *as, struct vnode *v,
+load_elf_page(struct vnode *v,
 	     off_t offset, vaddr_t vaddr,
-	     size_t memsize, size_t filesize,
-	     int is_executable)
+	     size_t memsize, size_t filesize)
 {
 	struct iovec iov;
 	struct uio u;
 	int result;
-
-	(void)as;
-	(void)is_executable;
 
 	#if OPT_TEST
 	void *kbuf;
@@ -23,8 +31,7 @@ load_elf_page(struct addrspace *as, struct vnode *v,
 		filesize = memsize;
 	}
 
-	// kprintf("ELF: Loading %lu bytes to 0x%lx\n",
-	//      (unsigned long) filesize, (unsigned long) vaddr);
+	DEBUG(DB_VM,"ELF: Loading %lu bytes to 0x%lx\n",(unsigned long) filesize, (unsigned long) vaddr);
 
 	#if OPT_TEST
 	uio_kinit(&iov, &u, kbuf, memsize, offset, UIO_READ);
@@ -93,54 +100,45 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
 	as = proc_getas();
 
-    swap = load_swap(vaddr, pid, paddr);
+    swap = load_swap(vaddr, pid, paddr); //we check if the page was already read from the elf, i.e. it currently is stored in the swapfile.
 
     if(swap){
-        return 0;
+        return 0; //load_swap takes care of loading too, so we just return.
     }
 
-    //load from elf
+    //If we arrive here the page wasn't found in the swapfile, so we must read it from the elf file.
 
-    //text segment
+	/**
+	 * We check if the virtual address provided belongs to the text segment
+	*/
     if(vaddr>=as->as_vbase1 && vaddr <= as->as_vbase1 + as->as_npages1 * PAGE_SIZE ){
 
-		//kprintf("\nLOADING CODE: ");
+		DEBUG(DB_VM,"\nLOADING CODE: ");
 
-		vaddr_t lastaddr = as->as_vbase1+(as->as_npages1-1)*PAGE_SIZE;
+		vaddr_t lastaddr = as->as_vbase1+(as->as_npages1-1)*PAGE_SIZE; //We compute the last virtual address of the segment. We need to do it to understand if we need to zero-fill the page or not (since the last page could have internal fragmentation).
 
-		add_pt_type_fault(DISK);
+		add_pt_type_fault(DISK);//Update statistics
 
-        if(as->ph1.p_memsz%PAGE_SIZE!=0 && vaddr == lastaddr){
-			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);
-            sz=as->ph1.p_memsz;
-			while(sz>PAGE_SIZE){
-				sz -= PAGE_SIZE;
-			}
+        if(as->ph1.p_memsz%PAGE_SIZE!=0 && vaddr == lastaddr){ //If as->ph1.p_memsz%PAGE_SIZE=0, the file size if a multiple of PAGE_SIZE and so we don't need to zero fill it. Otherwise, if we try to access the last virtual page we need to clear it before loading.
+			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);//To avoid additional TLB faults, we pretend that the physical address provided belongs to the kernel. In this way, the address tranlation will just be vaddr-0x80000000.
+            sz=as->ph1.p_memsz - (as->as_npages1-1)*PAGE_SIZE;//We compute the size of the last page.
         }
-        result = load_elf_page(as, as->v, as->ph1.p_offset+(vaddr - as->as_vbase1), PADDR_TO_KVADDR(paddr),
-				      sz, sz,
-				      as->ph1.p_flags & PF_X);
+        result = load_elf_page(as->v, as->ph1.p_offset+(vaddr - as->as_vbase1), PADDR_TO_KVADDR(paddr), sz, sz);//We load the page
 		if (result) {
             panic("Error while reading the text segment");
 		}
-        //as->ph1.p_offset+=PAGE_SIZE;
-		//as->ph1.p_vaddr+=PAGE_SIZE;
-        //as->ph1.p_memsz -= sz;
-        //as->ph1.p_filesz -= sz;
 
-		add_pt_type_fault(ELF);
+		add_pt_type_fault(ELF);//Update statistics
 
         return 0;
     }
 
-    //data segment
+    /**
+	 * We check if the virtual address provided belongs to the data segment. We use the same logic seen for text segment.
+	*/
     if(vaddr>=as->as_vbase2 && vaddr <= as->as_vbase2 + as->as_npages2 * PAGE_SIZE ){
 
-		//kprintf("\nLOADING DATA, virtual = 0x%x, physical = 0x%x\n",vaddr,paddr);
-
-		//char *kbuf;
-
-		//kbuf = kmalloc(PAGE_SIZE);
+		DEBUG(DB_VM,"\nLOADING DATA, virtual = 0x%x, physical = 0x%x\n",vaddr,paddr);
 
 		vaddr_t lastaddr = as->as_vbase2+(as->as_npages2-1)*PAGE_SIZE;
 
@@ -148,49 +146,44 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
 		if(as->ph2.p_memsz%PAGE_SIZE!=0 && vaddr == lastaddr){
 			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);
-            sz=as->ph2.p_memsz;
-			while(sz>PAGE_SIZE){
-				sz -= PAGE_SIZE;
-			}
+            sz=as->ph2.p_memsz - (as->as_npages2-1)*PAGE_SIZE;
         }
-        result = load_elf_page(as, as->v, as->ph2.p_offset+(vaddr - as->as_vbase2),PADDR_TO_KVADDR(paddr),
-				      PAGE_SIZE, PAGE_SIZE,
-				      as->ph2.p_flags & PF_X);
+        result = load_elf_page(as->v, as->ph2.p_offset+(vaddr - as->as_vbase2),PADDR_TO_KVADDR(paddr),
+				      PAGE_SIZE, PAGE_SIZE);
 		if (result) {
             panic("Error while reading the data segment");
 		}
 		// for(int i=0;i<PAGE_SIZE;i++){
 		// 	kprintf("%c",kbuf[i]);
 		// }
-        //as->ph2.p_offset+=PAGE_SIZE;
-		//as->ph2.p_vaddr+=PAGE_SIZE;
-		//as->ph2.p_memsz -= sz;
-        //as->ph2.p_filesz -= sz;
 
 		add_pt_type_fault(ELF);
 
         return 0;
     }
 
-    //stack segment
-    //the check is performed in this way since the stack grows up from 0x80000000
-    if(vaddr<=USERSTACK){
+    /**
+	 * We check if the virtual address provided belongs to the text segment.
+	 * The check is performed in this way since the stack grows up from 0x80000000 (excluded)
+	*/
+    if(vaddr<USERSTACK){
 
-		//kprintf("\nLOADING STACK: ");
+		DEBUG(DB_VM,"\nLOADING STACK: ");
 
-		// kprintf("ELF: Loading 4096 bytes to 0x%lx\n",
-	    //   (unsigned long) vaddr);
+		DEBUG(DB_VM,"ELF: Loading 4096 bytes to 0x%lx\n",(unsigned long) vaddr);
 
         //this time we just 0-fill the page, so no need to perform any kind of load.
         bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);
-		add_pt_type_fault(ZEROED);
+		
+		add_pt_type_fault(ZEROED);//update statistics
 
         return 0;
     }
 
-    //Error (out of range)
-    //End the program for illegal access
-
+    /**
+	 * Error (access outside the address space)
+     * End the program for illegal access
+	*/
     kprintf("-------SEGMENTATION FAULT---------");
 
     sys__exit(-1);

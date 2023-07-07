@@ -54,7 +54,6 @@ struct spinlock stealmem_lock;
  * Address space - data structure associated with the virtual memory
  * space of a process.
  *
- * You write this.
  */
 
 struct addrspace {
@@ -74,10 +73,9 @@ struct addrspace {
         size_t as_npages1;
         vaddr_t as_vbase2;
         size_t as_npages2;
-        paddr_t as_stackpbase;
-        Elf_Phdr ph1;
-        Elf_Phdr ph2;
-        struct vnode *v;
+        Elf_Phdr ph1;//Program header of the text section
+        Elf_Phdr ph2;//Program header of the data section
+        struct vnode *v;//vnode of the elf file
 #endif
 };
 

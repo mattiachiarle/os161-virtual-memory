@@ -60,7 +60,6 @@ as_create(void)
 	as->as_npages1 = 0;
 	as->as_vbase2 = 0;
 	as->as_npages2 = 0;
-	as->as_stackpbase = 0;
 
 	return as;
 }
@@ -121,7 +120,7 @@ as_activate(void)
 	}
 
 	spl = splhigh();
-	tlb_invalidate_all();
+	tlb_invalidate_all();//Since the TLB has not a PID field, we must invalidate it each time we activate a new address space
 	splx(spl);
 }
 
@@ -160,20 +159,20 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 
 	npages = memsize / PAGE_SIZE;
 
-	/* We don't use these - all pages are read-write */
+	/* We don't use these - exceptions about writing a readonly page will be raides by checking the virtual address */
 	(void)readable;
 	(void)writeable;
 	(void)executable;
 
 	if (as->as_vbase1 == 0) {
-		//kprintf("Text starts at: 0x%x\n",vaddr);
+		DEBUG(DB_VM,"Text starts at: 0x%x\n",vaddr);
 		as->as_vbase1 = vaddr;
 		as->as_npages1 = npages;
 		return 0;
 	}
 
 	if (as->as_vbase2 == 0) {
-		//kprintf("Data starts at: 0x%x\n",vaddr);
+		DEBUG(DB_VM,"Data starts at: 0x%x\n",vaddr);
 		as->as_vbase2 = vaddr;
 		as->as_npages2 = npages;
 		return 0;
@@ -188,7 +187,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 }
 
 int
-as_prepare_load(struct addrspace *as)
+as_prepare_load(struct addrspace *as)//not needed with on demand paging since we don't load anything without a fault
 {
 	/*
 	 * Write this.
@@ -199,7 +198,7 @@ as_prepare_load(struct addrspace *as)
 }
 
 int
-as_complete_load(struct addrspace *as)
+as_complete_load(struct addrspace *as)//not needed with on demand paging since we don't load anything without a fault
 {
 	/*
 	 * Write this.

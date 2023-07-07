@@ -12,47 +12,58 @@
 #include "vmstats.h"
 #include "synch.h"
 
-/*
+/**
  * Data structure to store the association 
  * (virtual address-pid) -> swapfile position
  */
 struct swapfile{
-    struct swap_cell *elements;
-    struct vnode *v;
-    size_t size;
-    struct lock *s_lock;
+    struct swap_cell *elements;//Array of pages in the swapfile
+    struct vnode *v;//vnode of the swapfile
+    size_t size;//Number of pages stored in the swapfile
+    struct lock *s_lock;//Used to allow mutual exclusion on the swapfile
 };
 
+/**
+ * Information related to a single page of the swapfile
+*/
 struct swap_cell{
-    pid_t pid; //it is used also as a flag to check if a certain cell is free or not
-    vaddr_t vaddr;
+    pid_t pid; //Pid of the process that owns that page. If pid=-1 the page is free
+    vaddr_t vaddr;//Virtual address corresponding to the stored page
 };
 
-/*
+/**
  * This function puts back a frame in RAM.
  *
- * @param: virtual address that caused the page fault
- * @param: pid of the process
- * @param: physical address of the RAM frame to use
+ * @param vaddr_t: virtual address that caused the page fault
+ * @param pid_t: pid of the process
+ * @param paddr_t: physical address of the RAM frame to use
  * 
- * @return: -1 in case of errors, 0 otherwise
+ * @return 1 if the page was found in the swapfile, 0 otherwise
 */
 int load_swap(vaddr_t, pid_t, paddr_t);
 
-/*
+/**
  * This function saves a frame into the swapfile.
  * If the swapfile has size>9MB, it raises kernel panic.
  *
- * @param: virtual address that caused the page fault
- * @param: pid of the process
- * @param: physical address of the RAM frame to save
+ * @param vaddr_t: virtual address that caused the page fault
+ * @param pid_t: pid of the process
+ * @param paddr_t: physical address of the RAM frame to save
  * 
- * @return: -1 in case of errors, 0 otherwise
+ * @return -1 in case of errors, 0 otherwise
 */
 int store_swap(vaddr_t, pid_t, paddr_t);
 
+/**
+ * This function initializes the swap file. In particular, it allocates the needed data structures and it opens the file that will store the pages.
+*/
 int swap_init(void);
 
-void remove_process_from_swap(pid_t pid);
+/**
+ * When a process terminates, we mark as free all its pages stored into the swapfile.
+ * 
+ * @param pid_t: pid of the ended process.
+*/
+void remove_process_from_swap(pid_t);
 
 #endif /* _SWAPFILE_H_ */
