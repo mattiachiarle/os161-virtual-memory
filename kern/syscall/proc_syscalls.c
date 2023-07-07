@@ -29,13 +29,16 @@ void
 sys__exit(int status)
 {
   struct proc *p = curproc;
-  p->p_status = status & 0xff; /* just lower 8 bits returned */
-  proc_remthread(curthread);
 
   #if OPT_PROJECT
   remove_process_from_swap(p->p_pid);
   free_pages(p->p_pid);
+  struct addrspace *as = proc_getas();
+  vfs_close(as->v);
   #endif
+
+  p->p_status = status & 0xff; /* just lower 8 bits returned */
+  proc_remthread(curthread);
 
   lock_acquire(p->lock);
   cv_signal(p->p_cv, p->lock);

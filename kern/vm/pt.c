@@ -98,7 +98,9 @@ paddr_t find_victim(vaddr_t vaddr, pid_t pid)
         {
             if (GETREFBIT(peps.pt[i].ctl) == 0) // if Ref bit==0 victim found
             {
+                lock_release(peps.ptlock);
                 store_swap(peps.pt[i].page,peps.pt[i].pid,i * PAGE_SIZE + peps.firstfreepaddr);
+                lock_acquire(peps.ptlock);
                 peps.pt[i].ctl = TLBBITONE(peps.pt[i].ctl);  // set isINTLB to 1
                 peps.pt[i].page = vaddr;
                 peps.pt[i].pid = pid;
@@ -146,8 +148,9 @@ paddr_t get_page(vaddr_t v)
         peps.pt[pos].pid = pid;
     }
 
-
+    lock_release(peps.ptlock);
     load_page(v, pid, pp);
+    lock_acquire(peps.ptlock);
     
     lock_release(peps.ptlock);
 
@@ -243,7 +246,9 @@ paddr_t get_contiguous_pages(int npages){
             if((GETREFBIT(peps.pt[i].ctl) == 0 || GETVALBIT(peps.pt[i].ctl) == 0) && i-first==npages-1){
                 for(j=first;j<=i;j++){
                     if(GETVALBIT(peps.pt[i].ctl) == 1){
+                        lock_release(peps.ptlock);
                         store_swap(peps.pt[i].page,peps.pt[i].pid,i * PAGE_SIZE + peps.firstfreepaddr);
+                        lock_acquire(peps.ptlock);
                     }
                     peps.pt[j].ctl = VALBITONE(j); //Set pages as valid
                     peps.pt[j].page = KMALLOC_PAGE;

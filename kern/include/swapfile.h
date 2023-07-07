@@ -10,6 +10,7 @@
 #include "lib.h"
 #include "vfs.h"
 #include "vmstats.h"
+#include "synch.h"
 
 /*
  * Data structure to store the association 
@@ -19,6 +20,7 @@ struct swapfile{
     struct swap_cell *elements;
     struct vnode *v;
     size_t size;
+    struct lock *s_lock;
 };
 
 struct swap_cell{

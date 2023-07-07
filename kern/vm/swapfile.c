@@ -2,14 +2,11 @@
 
 #define MAX_SIZE 9*1024*1024
 
-static int nread=0;
-static int nwrite=0;
-
 struct swapfile *swap;
 
 int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
-    nread++;
+    lock_acquire(swap->s_lock);
 
     //kprintf("\nLOAD SWAP");
 
@@ -31,21 +28,25 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
             result = VOP_READ(swap->v,&ku);
             if(result){
-                panic("VOP_READ in swapfile failed, with result=%d, after %d reads and %d writes",result, nread, nwrite);
+                panic("VOP_READ in swapfile failed, with result=%d",result);
             }
 
             add_pt_type_fault(SWAPFILE);
 
+            lock_release(swap->s_lock);
+
             return 1;
         }
     }
+
+    lock_release(swap->s_lock);
 
     return 0;
 }
 
 int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
-    nwrite++;
+    lock_acquire(swap->s_lock);
 
     //kprintf("\nSTORE SWAP");
 
@@ -70,12 +71,14 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
             result = VOP_WRITE(swap->v,&ku);
             if(result){
-                panic("VOP_WRITE in swapfile failed, with result=%d, after %d reads and %d writes",result, nread, nwrite);
+                panic("VOP_WRITE in swapfile failed, with result=%d",result);
             }
 
             //kfree(kbuf);
 
             add_swap_writes();
+            
+            lock_release(swap->s_lock);
 
             return 1;
         }
@@ -101,6 +104,8 @@ int swap_init(void){
 		return result;
 	}
 
+    swap->s_lock = lock_create("swap_lock");
+
     swap->size = MAX_SIZE/PAGE_SIZE;
     swap->elements = kmalloc(swap->size*sizeof(struct swap_cell));
     if(!swap->elements){
@@ -118,10 +123,14 @@ int swap_init(void){
 void remove_process_from_swap(pid_t pid){
     size_t i;
 
+    lock_acquire(swap->s_lock);
+
     for(i=0;i<swap->size;i++){
         if(swap->elements[i].pid==pid){
             swap->elements[i].pid=-1;
         }
     }
+
+    lock_release(swap->s_lock);
 
 }
