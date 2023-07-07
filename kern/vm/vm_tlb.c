@@ -28,11 +28,8 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
 
     //kprintf("\nfault address: 0x%x\n",faultaddress);
     paddr_t paddr;
-    uint32_t mask = PAGE_FRAME, addr, res;
-
-    addr = (uint32_t) faultaddress;
-
-    res = addr & mask; // do I ?
+  
+    faultaddress &= PAGE_FRAME;
 
     /*I update the statistics*/
     add_tlb_fault();
@@ -57,9 +54,9 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     /*did mattia set up the as correctly?*/
     KASSERT(as_is_ok() == 1);
 
-    paddr = get_page(res);
+    paddr = get_page(faultaddress);
     int spl = splhigh(); // so that the control does nit pass to another waiting process.
-    tlb_insert(res, paddr);
+    tlb_insert(faultaddress, paddr);
     splx(spl);
     return 0;
 }
