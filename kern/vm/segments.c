@@ -29,7 +29,19 @@ load_elf_page(struct vnode *v,
 
 	DEBUG(DB_VM,"ELF: Loading %lu bytes to 0x%lx\n",(unsigned long) filesize, (unsigned long) vaddr);
 
-	uio_kinit(&iov, &u, (void *)vaddr, memsize, offset, UIO_READ);//We prepare the future read
+	/**
+	 * We can't use uio_kinit, since it doesn't allow to set a different value for iov_len and uio_resid
+	*/
+
+	iov.iov_ubase = (userptr_t)vaddr;
+	iov.iov_len = memsize;		 // length of the memory space
+	u.uio_iov = &iov;
+	u.uio_iovcnt = 1;
+	u.uio_resid = filesize;          // amount to read from the file
+	u.uio_offset = offset;
+	u.uio_segflg = UIO_SYSSPACE;
+	u.uio_rw = UIO_READ;
+	u.uio_space = NULL;
 
 	result = VOP_READ(v, &u);//We read
 
@@ -40,7 +52,7 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
     int swap, result;
     struct addrspace *as;
-    int sz=PAGE_SIZE;
+    int sz=PAGE_SIZE, memsz=PAGE_SIZE;;
 
 	as = proc_getas();
 
@@ -59,15 +71,22 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
 		DEBUG(DB_VM,"\nLOADING CODE: ");
 
-		vaddr_t lastaddr = as->as_vbase1+(as->as_npages1-1)*PAGE_SIZE; //We compute the last virtual address of the segment. We need to do it to understand if we need to zero-fill the page or not (since the last page could have internal fragmentation).
+		//vaddr_t lastaddr = as->as_vbase1+(as->as_npages1-1)*PAGE_SIZE; //We compute the last virtual address of the segment. We need to do it to understand if we need to zero-fill the page or not (since the last page could have internal fragmentation).
 
 		add_pt_type_fault(DISK);//Update statistics
 
-        if(as->ph1.p_memsz%PAGE_SIZE!=0 && vaddr == lastaddr){ //If as->ph1.p_memsz%PAGE_SIZE=0, the file size if a multiple of PAGE_SIZE and so we don't need to zero fill it. Otherwise, if we try to access the last virtual page we need to clear it before loading.
+        if(as->ph1.p_filesz - (vaddr - as->as_vbase1)<PAGE_SIZE){ //If as->ph1.p_memsz%PAGE_SIZE=0, the file size if a multiple of PAGE_SIZE and so we don't need to zero fill it. Otherwise, if we try to access the last virtual page we need to clear it before loading.
 			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);//To avoid additional TLB faults, we pretend that the physical address provided belongs to the kernel. In this way, the address tranlation will just be vaddr-0x80000000.
-            sz=as->ph1.p_memsz - (as->as_npages1-1)*PAGE_SIZE;//We compute the size of the last page.
+            sz=as->ph1.p_filesz - (vaddr - as->as_vbase1);//We compute the file size of the last page.
+			memsz=as->ph1.p_memsz - (vaddr - as->as_vbase1);//We compute the memory size of the last page.
         }
-        result = load_elf_page(as->v, as->ph1.p_offset+(vaddr - as->as_vbase1), PADDR_TO_KVADDR(paddr), sz, sz);//We load the page
+
+		if((int)as->ph1.p_filesz - (int)(vaddr - as->as_vbase1)<0){//This check is fundamental to avoid issues with programs that have filesz<memsz. In fact, without this check we wouldn't zero the page, causing errors. For a deeper understanding, try to debug testbin/zero analyzing the difference between memsz and filesz.
+			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);
+			return 0;//We directly return to avoid performing a read of 0 bytes
+        }
+
+        result = load_elf_page(as->v, as->ph1.p_offset+(vaddr - as->as_vbase1), PADDR_TO_KVADDR(paddr), memsz, sz);//We load the page
 		if (result) {
             panic("Error while reading the text segment");
 		}
@@ -84,16 +103,20 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
 		DEBUG(DB_VM,"\nLOADING DATA, virtual = 0x%x, physical = 0x%x\n",vaddr,paddr);
 
-		vaddr_t lastaddr = as->as_vbase2+(as->as_npages2-1)*PAGE_SIZE;
-
 		add_pt_type_fault(DISK);
 
-		if(as->ph2.p_memsz%PAGE_SIZE!=0 && vaddr == lastaddr){
-			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);
-            sz=as->ph2.p_memsz - (as->as_npages2-1)*PAGE_SIZE;
+		if(as->ph2.p_filesz - (vaddr - as->as_vbase2)<PAGE_SIZE){ //If as->ph1.p_memsz%PAGE_SIZE=0, the file size if a multiple of PAGE_SIZE and so we don't need to zero fill it. Otherwise, if we try to access the last virtual page we need to clear it before loading.
+			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);//To avoid additional TLB faults, we pretend that the physical address provided belongs to the kernel. In this way, the address tranlation will just be vaddr-0x80000000.
+            sz=as->ph2.p_filesz - (vaddr - as->as_vbase2);//We compute the file size of the last page.
+			memsz=as->ph2.p_memsz - (vaddr - as->as_vbase2);//We compute the memory size of the last page.
         }
-        result = load_elf_page(as->v, as->ph2.p_offset+(vaddr - as->as_vbase2),PADDR_TO_KVADDR(paddr),
-				      PAGE_SIZE, PAGE_SIZE);
+
+		if((int)as->ph2.p_filesz - (int)(vaddr - as->as_vbase2)<0){//This check is fundamental to avoid issues with programs that have filesz<memsz. In fact, without this check we wouldn't zero the page, causing errors. For a deeper understanding, try to debug testbin/zero analyzing the difference between memsz and filesz.
+			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);
+			return 0;//We directly return to avoid performing a read of 0 bytes
+		}
+
+        result = load_elf_page(as->v, as->ph2.p_offset+(vaddr - as->as_vbase2),	PADDR_TO_KVADDR(paddr),memsz, sz);//We load the page
 		if (result) {
             panic("Error while reading the data segment");
 		}
