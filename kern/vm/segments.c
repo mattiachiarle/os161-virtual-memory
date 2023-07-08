@@ -113,6 +113,7 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
 		if((int)as->ph2.p_filesz - (int)(vaddr - as->as_vbase2)<0){//This check is fundamental to avoid issues with programs that have filesz<memsz. In fact, without this check we wouldn't zero the page, causing errors. For a deeper understanding, try to debug testbin/zero analyzing the difference between memsz and filesz.
 			bzero((void*)PADDR_TO_KVADDR(paddr), PAGE_SIZE);
+			add_pt_type_fault(ELF);
 			return 0;//We directly return to avoid performing a read of 0 bytes
 		}
 
