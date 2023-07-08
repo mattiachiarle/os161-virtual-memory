@@ -3,7 +3,7 @@
 /**
  * This function reads a page from the elf file into the provided virtual address.
  * 
- * @param v; the vnode of the elf file
+ * @param v: the vnode of the elf file
  * @param offset: the offset used inside the elf file
  * @param vaddr: the virtual address in which we can store the read data
  * @param memsize: the amount of memory to read
@@ -22,10 +22,6 @@ load_elf_page(struct vnode *v,
 	struct uio u;
 	int result;
 
-	#if OPT_TEST
-	void *kbuf;
-	#endif
-
 	if (filesize > memsize) {
 		kprintf("ELF: warning: segment filesize > segment memsize\n");
 		filesize = memsize;
@@ -33,61 +29,9 @@ load_elf_page(struct vnode *v,
 
 	DEBUG(DB_VM,"ELF: Loading %lu bytes to 0x%lx\n",(unsigned long) filesize, (unsigned long) vaddr);
 
-	#if OPT_TEST
-	uio_kinit(&iov, &u, kbuf, memsize, offset, UIO_READ);
-	#else
-	iov.iov_ubase = (userptr_t)vaddr;
-	iov.iov_len = memsize;		 // length of the memory space
-	u.uio_iov = &iov;
-	u.uio_iovcnt = 1;
-	u.uio_resid = filesize;          // amount to read from the file
-	u.uio_offset = offset;
-	u.uio_segflg = UIO_SYSSPACE;
-	u.uio_rw = UIO_READ;
-	u.uio_space = NULL;
-	#endif
+	uio_kinit(&iov, &u, (void *)vaddr, memsize, offset, UIO_READ);//We prepare the future read
 
-	#if OPT_TEST
-	result = VOP_READ(v, &u);
-	#else
-	result = VOP_READ(v, &u);
-	#endif
-
-	if (result) {
-		return result;
-	}
-
-	#if OPT_TEST
-	copyout();
-	#endif
-
-	/*
-	 * If memsize > filesize, the remaining space should be
-	 * zero-filled. There is no need to do this explicitly,
-	 * because the VM system should provide pages that do not
-	 * contain other processes' data, i.e., are already zeroed.
-	 *
-	 * During development of your VM system, it may have bugs that
-	 * cause it to (maybe only sometimes) not provide zero-filled
-	 * pages, which can cause user programs to fail in strange
-	 * ways. Explicitly zeroing program BSS may help identify such
-	 * bugs, so the following disabled code is provided as a
-	 * diagnostic tool. Note that it must be disabled again before
-	 * you submit your code for grading.
-	 */
-#if 0
-	{
-		size_t fillamt;
-
-		fillamt = memsize - filesize;
-		if (fillamt > 0) {
-			DEBUG(DB_EXEC, "ELF: Zero-filling %lu more bytes\n",
-			      (unsigned long) fillamt);
-			u.uio_resid += fillamt;
-			result = uiomovezeros(fillamt, &u);
-		}
-	}
-#endif
+	result = VOP_READ(v, &u);//We read
 
 	return result;
 }
