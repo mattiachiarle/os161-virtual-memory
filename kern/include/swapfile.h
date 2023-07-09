@@ -11,15 +11,26 @@
 #include "vfs.h"
 #include "vmstats.h"
 #include "synch.h"
+#include "proc.h"
+#include "opt-sw_list.h"
+#include "vm.h"
+#include "opt-debug.h"
 
 /**
  * Data structure to store the association 
  * (virtual address-pid) -> swapfile position
  */
 struct swapfile{
-    struct swap_cell *elements;//Array of pages in the swapfile
+    #if OPT_SW_LIST
+    struct swap_cell **text;//Array of lists of text pages in the swapfile (one for each pid)
+    struct swap_cell **data;//Array of lists of data pages in the swapfile (one for each pid)
+    struct swap_cell **stack;//Array of lists of stack pages in the swapfile (one for each pid)
+    struct swap_cell *free;//List of free pages in the swapfile
+    #else
+    struct swap_cell *elements;//Array of lists in the swapfile (one for each pid)
+    #endif
     struct vnode *v;//vnode of the swapfile
-    size_t size;//Number of pages stored in the swapfile
+    int size;//Number of pages stored in the swapfile
     struct lock *s_lock;//Used to allow mutual exclusion on the swapfile
 };
 
@@ -27,8 +38,13 @@ struct swapfile{
  * Information related to a single page of the swapfile
 */
 struct swap_cell{
-    pid_t pid; //Pid of the process that owns that page. If pid=-1 the page is free
     vaddr_t vaddr;//Virtual address corresponding to the stored page
+    #if OPT_SW_LIST
+    struct swap_cell *next;
+    paddr_t offset;//Offset of the swap element within the swapfile
+    #else
+    pid_t pid; //Pid of the process that owns that page. If pid=-1 the page is free
+    #endif
 };
 
 /**

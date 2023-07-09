@@ -36,6 +36,8 @@
  * Note: curproc is defined by <current.h>.
  */
 
+#define MAX_PROC 100
+
 #include <spinlock.h>
 #include "synch.h"
 
