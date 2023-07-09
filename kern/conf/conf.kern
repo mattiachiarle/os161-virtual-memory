@@ -428,6 +428,7 @@ defoption test
 defoption project
 defoption sw_list
 defoption debug
+defoption fork
 
 file syscall/proc_syscalls.c
 file syscall/file_syscalls.c

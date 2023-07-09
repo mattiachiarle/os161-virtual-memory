@@ -105,7 +105,7 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
     }
 
     #else
-    size_t i;
+    int i;
     for(i=0;i<swap->size; i++){
         if(swap->elements[i].pid==pid && swap->elements[i].vaddr==vaddr){//We search for a matching entry
             add_pt_type_fault(DISK);//Update statistics
@@ -138,8 +138,6 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
     lock_acquire(swap->s_lock);
-
-    DEBUG(DB_VM,"\nSTORE SWAP");
 
     int result;
     struct iovec iov;
@@ -181,6 +179,8 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
     //print_list(pid);
 
+    DEBUG(DB_VM,"STORE SWAP in 0x%x\n",free->offset);
+
     uio_kinit(&iov,&ku,(void*)PADDR_TO_KVADDR(paddr),PAGE_SIZE,free->offset,UIO_WRITE);
 
     result = VOP_WRITE(swap->v,&ku);//We write on the swapfile
@@ -195,7 +195,7 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
     return 1;
 
     #else
-    size_t i;
+    int i;
     for(i=0;i<swap->size; i++){
         if(swap->elements[i].pid==-1){//We search for a free entry
 
@@ -340,7 +340,7 @@ void remove_process_from_swap(pid_t pid){
     //print_list(pid);
 
     #else
-    size_t i;
+    int i;
     
     for(i=0;i<swap->size;i++){
         if(swap->elements[i].pid==pid){//If a page belongs to the ended process, we mark it as free
