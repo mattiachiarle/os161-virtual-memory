@@ -13,7 +13,7 @@
 #include "vm.h"
 #include "vmstats.h"
 
-pid_t previous_pid;
+
 
 /*todo: ask the boys what it was meant for because I do not remember anymore*/
 int tlb_remove(void){
