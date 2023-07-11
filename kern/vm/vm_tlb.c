@@ -12,6 +12,9 @@
  */
 #include "vm.h"
 #include "vmstats.h"
+
+
+
 /*todo: ask the boys what it was meant for because I do not remember anymore*/
 int tlb_remove(void){
     return -1;
@@ -125,7 +128,7 @@ int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
     }
     tlb_read(&prevHi, &prevLo, entry);
     /*notify the pt that the entry with that virtual address is not in tlb anymore*/
-    cabodi(prevHi,old_pid);
+    cabodi(prevHi, curproc->p_pid);
     tlb_write(hi, lo, entry);
     /*update tlb faults replace*/
     add_tlb_type_fault(FAULT_W_REPLACE);
@@ -157,16 +160,19 @@ int tlb_invalidate_entry(paddr_t paddr){
 void tlb_invalidate_all(void){
     int spl = splhigh(); // so that the control does nit pass to another waiting process.
     uint32_t hi, lo;
+    pid_t pid = curproc->p_pid;
+    if(previous_pid != pid) // the process (not the thread) changed
+    {
     add_tlb_invalidation();
     for(int i = 0; i<NUM_TLB; i++){
             if(tlb_entry_is_valid(i)){
                 tlb_read(&hi,&lo,i);
-                cabodi(hi,old_pid);
+                cabodi(hi,previous_pid);
             }
             tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+            }
+    previous_pid = pid;
     }
-    old_pid=curproc->p_pid; //check if it works with francy version
-    splx(spl);
 }
 
 void print_tlb(void){
