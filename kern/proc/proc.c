@@ -68,7 +68,7 @@ struct proc *kproc;
 struct proc *
 proc_search_pid(pid_t pid) {
   struct proc *p;
-  KASSERT(pid>=0&&pid<MAX_PROC);
+  KASSERT(pid>0&&pid<=MAX_PROC);
   p = processTable.proc[pid];
   KASSERT(p->p_pid==pid);
   return p;
@@ -152,6 +152,8 @@ proc_create(const char *name)
 	proc->p_cwd = NULL;
 
 	proc_init_waitpid(proc,name);
+
+	proc->ended=0;
 
 	return proc;
 }
@@ -406,7 +408,9 @@ proc_wait(struct proc *proc)
 
 	/* wait on semaphore or condition variable */ 
 	lock_acquire(proc->lock);
-	cv_wait(proc->p_cv, proc->lock);
+	while(!proc->ended){
+		cv_wait(proc->p_cv, proc->lock);
+	}
 	lock_release(proc->lock);
 	return_status = proc->p_status;
 	proc_destroy(proc);

@@ -27,6 +27,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     //print_tlb();
 
     //kprintf("\nfault address: 0x%x\n",faultaddress);
+    int spl = splhigh(); // so that the control does nit pass to another waiting process.
     paddr_t paddr;
   
     faultaddress &= PAGE_FRAME;
@@ -55,7 +56,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     KASSERT(as_is_ok() == 1);
 
     paddr = get_page(faultaddress);
-    int spl = splhigh(); // so that the control does nit pass to another waiting process.
+    
     tlb_insert(faultaddress, paddr);
     splx(spl);
     return 0;
@@ -124,7 +125,7 @@ int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
     }
     tlb_read(&prevHi, &prevLo, entry);
     /*notify the pt that the entry with that virtual address is not in tlb anymore*/
-    cabodi(prevHi);
+    cabodi(prevHi,old_pid);
     tlb_write(hi, lo, entry);
     /*update tlb faults replace*/
     add_tlb_type_fault(FAULT_W_REPLACE);
@@ -154,15 +155,18 @@ int tlb_invalidate_entry(paddr_t paddr){
 }
 
 void tlb_invalidate_all(void){
+    int spl = splhigh(); // so that the control does nit pass to another waiting process.
     uint32_t hi, lo;
     add_tlb_invalidation();
     for(int i = 0; i<NUM_TLB; i++){
             if(tlb_entry_is_valid(i)){
                 tlb_read(&hi,&lo,i);
-                cabodi(hi);
+                cabodi(hi,old_pid);
             }
             tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
     }
+    old_pid=curproc->p_pid; //check if it works with francy version
+    splx(spl);
 }
 
 void print_tlb(void){

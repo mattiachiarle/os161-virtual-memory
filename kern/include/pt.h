@@ -5,6 +5,8 @@
 #include "types.h"
 #include "addrspace.h"
 #include "kern/errno.h"
+#include "synch.h"
+#include "spl.h"
 
 int pt_active;
 
@@ -28,6 +30,8 @@ struct ptInfo
     paddr_t firstfreepaddr;
     struct lock *ptlock;
     int *contiguous;
+    struct spinlock test;
+    struct semaphore *sem;
 } peps;
 
 /*
@@ -89,12 +93,14 @@ paddr_t find_victim(vaddr_t, pid_t);
 void free_pages(pid_t);
 
 
-int cabodi(vaddr_t);
+int cabodi(vaddr_t, pid_t);
 
 paddr_t get_contiguous_pages(int);
 
 void free_contiguous_pages(vaddr_t);
 
-void pt_reset_tlb(void);
+//void pt_reset_tlb(void);
+
+void copy_pt_entries(pid_t, pid_t);
 
 #endif

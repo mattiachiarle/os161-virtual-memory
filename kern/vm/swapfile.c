@@ -2,6 +2,8 @@
 
 #define MAX_SIZE 9*1024*1024
 
+//static int occ = 0;
+
 struct swapfile *swap;
 
 /**
@@ -33,9 +35,7 @@ static void print_list(pid_t pid){
 
 int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
-    lock_acquire(swap->s_lock); //To enforce mutual exclusion, since the swapfile is shared
-
-    DEBUG(DB_VM,"\nLOAD SWAP");
+    //lock_acquire(swap->s_lock); //To enforce mutual exclusion, since the swapfile is shared
 
     int result;
     struct iovec iov;
@@ -60,6 +60,8 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
         list = swap->stack[pid];
         seg=2;
     }
+
+    DEBUG(DB_VM,"\nLOAD SWAP in 0x%x\n",list->offset);
     
     while(list!=NULL){
         if(list->vaddr==vaddr){
@@ -67,10 +69,12 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
             uio_kinit(&iov,&ku,(void*)PADDR_TO_KVADDR(paddr),PAGE_SIZE,list->offset,UIO_READ);//Again we use paddr as it was a kernel physical address to avoid a recursion of faults
 
+            //lock_acquire(swap->s_lock);
             result = VOP_READ(swap->v,&ku);//We perform the read
             if(result){
                 panic("VOP_READ in swapfile failed, with result=%d",result);
             }
+            //lock_release(swap->s_lock);
 
             add_pt_type_fault(SWAPFILE);//Update statistics
 
@@ -93,7 +97,7 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
                 swap->free=list;
             }
 
-            lock_release(swap->s_lock);
+            //lock_release(swap->s_lock);
 
             //print_list(pid);
 
@@ -112,32 +116,39 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
             swap->elements[i].pid=-1;//Since we move the page from swap to RAM, we mark this entry as free for the future
 
-            DEBUG(DB_VM,"SWAP: Loading into RAM %lu bytes to 0x%lx (offset in swapfile : 0x%lx)\n",(unsigned long) PAGE_SIZE, (unsigned long) paddr, (unsigned long) i*PAGE_SIZE);
+            //DEBUG(DB_VM,
+            //kprintf("SWAP: Process %d loading into RAM %lu bytes to 0x%lx (offset in swapfile : 0x%lx)\n",curproc->p_pid,(unsigned long) PAGE_SIZE, (unsigned long) paddr, (unsigned long) i*PAGE_SIZE);
             
             uio_kinit(&iov,&ku,(void*)PADDR_TO_KVADDR(paddr),PAGE_SIZE,i*PAGE_SIZE,UIO_READ);//Again we use paddr as it was a kernel physical address to avoid a recursion of faults
 
+            //lock_acquire(swap->s_lock);
             result = VOP_READ(swap->v,&ku);//We perform the read
+            //lock_release(swap->s_lock);
             if(result){
                 panic("VOP_READ in swapfile failed, with result=%d",result);
             }
 
             add_pt_type_fault(SWAPFILE);//Update statistics
 
-            lock_release(swap->s_lock);
+            occ--;
+
+            //kprintf("Process %d read. Now occ=%d\n",curproc->p_pid,occ);
+
+            //lock_release(swap->s_lock);
 
             return 1;//We found the entry in the swapfile, so we return 1
         }
     }
     #endif
 
-    lock_release(swap->s_lock);
+    //lock_release(swap->s_lock);
 
     return 0;//We didn't find any entry, so we return 0
 }
 
 int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
-    lock_acquire(swap->s_lock);
+    //lock_acquire(swap->s_lock);
 
     int result;
     struct iovec iov;
@@ -146,51 +157,53 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
     #if OPT_SW_LIST
 
     struct addrspace *as=proc_getas();
-    struct swap_cell *free;
+    struct swap_cell *free_frame;
     int flag=0;
 
-    free=swap->free;
+    free_frame=swap->free;
 
-    if(free==NULL){
+    if(free_frame==NULL){
         panic("The swapfile is full!");//If we didn't find any free entry the swapfile was full, and we panic
     }
 
-    swap->free = free->next;
+    swap->free = free_frame->next;
 
     if(vaddr>=as->as_vbase1 && vaddr <= as->as_vbase1 + as->as_npages1 * PAGE_SIZE ){
-        free->next=swap->text[pid];
-        free->vaddr=vaddr;
-        swap->text[pid]=free;
+        free_frame->next=swap->text[pid];
+        free_frame->vaddr=vaddr;
+        swap->text[pid]=free_frame;
         flag=1;
     }
 
     if(vaddr>=as->as_vbase2 && vaddr <= as->as_vbase2 + as->as_npages2 * PAGE_SIZE ){
-        free->next=swap->data[pid];
-        free->vaddr=vaddr;
-        swap->data[pid]=free;
+        free_frame->next=swap->data[pid];
+        free_frame->vaddr=vaddr;
+        swap->data[pid]=free_frame;
         flag=1;
     }
 
     if(vaddr <= USERSTACK && !flag ){
-        free->next=swap->stack[pid];
-        free->vaddr=vaddr;
-        swap->stack[pid]=free;
+        free_frame->next=swap->stack[pid];
+        free_frame->vaddr=vaddr;
+        swap->stack[pid]=free_frame;
     }
 
     //print_list(pid);
 
-    DEBUG(DB_VM,"STORE SWAP in 0x%x\n",free->offset);
+    DEBUG(DB_VM,"STORE SWAP in 0x%x\n",free_frame->offset);
 
-    uio_kinit(&iov,&ku,(void*)PADDR_TO_KVADDR(paddr),PAGE_SIZE,free->offset,UIO_WRITE);
+    uio_kinit(&iov,&ku,(void*)PADDR_TO_KVADDR(paddr),PAGE_SIZE,free_frame->offset,UIO_WRITE);
 
+    //lock_acquire(swap->s_lock);
     result = VOP_WRITE(swap->v,&ku);//We write on the swapfile
     if(result){
         panic("VOP_WRITE in swapfile failed, with result=%d",result);
     }
+    //lock_release(swap->s_lock);
 
     add_swap_writes();//Update statistics
             
-    lock_release(swap->s_lock);
+    //lock_release(swap->s_lock);
 
     return 1;
 
@@ -209,7 +222,9 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
             
             uio_kinit(&iov,&ku,(void*)PADDR_TO_KVADDR(paddr),PAGE_SIZE,i*PAGE_SIZE,UIO_WRITE);
 
+            //lock_acquire(swap->s_lock);
             result = VOP_WRITE(swap->v,&ku);//We write on the swapfile
+            //lock_release(swap->s_lock);
             if(result){
                 panic("VOP_WRITE in swapfile failed, with result=%d",result);
             }
@@ -217,8 +232,12 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
             //kfree(kbuf);
 
             add_swap_writes();//Update statistics
+
+            occ++;
+
+            //kprintf("Process %d wrote. Now occ=%d\n",curproc->p_pid,occ);
             
-            lock_release(swap->s_lock);
+            //lock_release(swap->s_lock);
 
             return 1;
         }
@@ -305,7 +324,9 @@ int swap_init(void){
 
 void remove_process_from_swap(pid_t pid){
 
-    lock_acquire(swap->s_lock);
+    //kprintf("Process %d is freeing!\n",pid);
+
+    //lock_acquire(swap->s_lock);
 
     #if OPT_SW_LIST
     struct swap_cell *elem, *next;
@@ -344,11 +365,165 @@ void remove_process_from_swap(pid_t pid){
     
     for(i=0;i<swap->size;i++){
         if(swap->elements[i].pid==pid){//If a page belongs to the ended process, we mark it as free
+            occ--;
+            //kprintf("Process %d released. Now occ=%d\n",curproc->p_pid,occ);
             swap->elements[i].pid=-1;
         }
     }
     #endif
 
-    lock_release(swap->s_lock);
+    //lock_release(swap->s_lock);
 
+}
+
+void copy_swap_pages(pid_t old_pid, pid_t new_pid){
+
+    // lock_acquire(swap->s_lock);
+    // P(peps.sem);
+
+    void *kbuf = kmalloc(PAGE_SIZE);
+    struct uio u;
+    struct iovec iov;
+    int result;
+
+    #if OPT_SW_LIST
+    struct swap_cell *ptr, *free;
+    
+    if(swap->text[old_pid]!=NULL){
+        for(ptr = swap->text[old_pid]; ptr!=NULL; ptr=ptr->next){
+            free=swap->free;
+
+            if(free==NULL){
+                panic("The swapfile is full!");//We don't have enough pages to perform the fork
+            }
+
+            swap->free = free->next;
+            free->next = swap->text[new_pid];
+            swap->text[new_pid] = free;
+            free->vaddr = ptr->vaddr;
+            //kprintf("Copying from 0x%x to 0x%x",ptr->offset,free->offset);
+            uio_kinit(&iov,&u,kbuf,PAGE_SIZE,ptr->offset,UIO_READ);
+            //lock_acquire(swap->s_lock);
+            result = VOP_READ(swap->v,&u);//We perform the read
+            if(result){
+                panic("VOP_READ in swapfile failed, with result=%d",result);
+            }
+
+
+            // for(int i=0;i<PAGE_SIZE;i++){
+            //     kprintf("%c",kbuf[i]);
+            // }
+
+            uio_kinit(&iov,&u,(void* )kbuf,PAGE_SIZE,free->offset,UIO_WRITE);
+            result = VOP_WRITE(swap->v,&u);//We perform the read
+            if(result){
+                panic("VOP_READ in swapfile failed, with result=%d",result);
+            }
+            //lock_release(swap->s_lock);
+        }
+    }
+    if(swap->data[old_pid]!=NULL){
+        for(ptr = swap->data[old_pid]; ptr!=NULL; ptr=ptr->next){
+            free=swap->free;
+
+            if(free==NULL){
+                panic("The swapfile is full!");//We don't have enough pages to perform the fork
+            }
+
+            swap->free = free->next;
+            free->next = swap->data[new_pid];
+            swap->data[new_pid] = free;
+            free->vaddr = ptr->vaddr;
+            //kprintf("Copying from 0x%x to 0x%x",ptr->offset,free->offset);
+            uio_kinit(&iov,&u,kbuf,PAGE_SIZE,ptr->offset,UIO_READ);
+            //lock_acquire(swap->s_lock);
+            result = VOP_READ(swap->v,&u);//We perform the read
+            if(result){
+                panic("VOP_READ in swapfile failed, with result=%d",result);
+            }
+
+            uio_kinit(&iov,&u,kbuf,PAGE_SIZE,free->offset,UIO_WRITE);
+            result = VOP_WRITE(swap->v,&u);//We perform the read
+            if(result){
+                panic("VOP_READ in swapfile failed, with result=%d",result);
+            }
+            //lock_release(swap->s_lock);
+
+        }
+    }
+
+    if(swap->stack[old_pid]!=NULL){
+        for(ptr = swap->stack[old_pid]; ptr!=NULL; ptr=ptr->next){
+            free=swap->free;
+
+            if(free==NULL){
+                panic("The swapfile is full!");//We don't have enough pages to perform the fork
+            }
+
+            swap->free = free->next;
+            free->next = swap->stack[new_pid];
+            swap->stack[new_pid] = free;
+            free->vaddr = ptr->vaddr;
+            //kprintf("Copying from 0x%x to 0x%x",ptr->offset,free->offset);
+            uio_kinit(&iov,&u,kbuf,PAGE_SIZE,ptr->offset,UIO_READ);
+            //lock_acquire(swap->s_lock);
+            result = VOP_READ(swap->v,&u);//We perform the read
+            if(result){
+                panic("VOP_READ in swapfile failed, with result=%d",result);
+            }
+
+            uio_kinit(&iov,&u,kbuf,PAGE_SIZE,free->offset,UIO_WRITE);
+            result = VOP_WRITE(swap->v,&u);//We perform the read
+            if(result){
+                panic("VOP_READ in swapfile failed, with result=%d",result);
+            }
+            //lock_release(swap->s_lock);
+        }
+    }
+
+    #else
+    int i,j;
+
+    for(i=0;i<swap->size;i++){
+        if(swap->elements[i].pid==old_pid){
+            for(j=0;j<swap->size; j++){
+                if(swap->elements[j].pid==-1){//We search for a free entry
+
+                    swap->elements[j].pid=new_pid;
+                    swap->elements[j].vaddr=swap->elements[i].vaddr;//We assign the empty entry found to the page that must be stored
+                    
+                    uio_kinit(&iov,&u,(void* )kbuf,PAGE_SIZE,i*PAGE_SIZE,UIO_READ);
+                    result = VOP_READ(swap->v,&u);//We perform the read
+                    if(result){
+                        panic("VOP_READ in swapfile failed, with result=%d",result);
+                    }
+
+                    for(int k=0;k<PAGE_SIZE;k++){
+                        kprintf("%c",kbuf[i]);
+                    }
+
+                    uio_kinit(&iov,&u,(void* )kbuf,PAGE_SIZE,j*PAGE_SIZE,UIO_WRITE);
+                    result = VOP_WRITE(swap->v,&u);//We perform the read
+                    if(result){
+                        panic("VOP_READ in swapfile failed, with result=%d",result);
+                    }
+                    
+                    break;
+                }
+            }
+            if(j==swap->size){
+                panic("The swapfile is full!");//We don't have enough pages to perform the fork
+            }
+            occ++;
+
+            //kprintf("Process %d copied a page into %d. Now occ=%d\n",old_pid, new_pid, occ);
+        }
+    }
+
+    #endif
+
+    kfree(kbuf);
+
+    // lock_release(swap->s_lock);
+    // V(peps.sem);
 }

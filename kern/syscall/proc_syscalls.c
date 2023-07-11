@@ -28,21 +28,28 @@
 void
 sys__exit(int status)
 {
+  int spl = splhigh(); // so that the control does nit pass to another waiting process.
+
   struct proc *p = curproc;
 
   #if OPT_PROJECT
   remove_process_from_swap(p->p_pid);
   free_pages(p->p_pid);
-  struct addrspace *as = proc_getas();
-  vfs_close(as->v);
+  //struct addrspace *as = proc_getas();
+  //vfs_close(as->v);
   #endif
+
+  //kprintf("Process %d ending\n",curproc->p_pid);
 
   p->p_status = status & 0xff; /* just lower 8 bits returned */
   proc_remthread(curthread);
 
   lock_acquire(p->lock);
+  p->ended=1;
   cv_signal(p->p_cv, p->lock);
+  //kprintf("process %d signaled end/n", curproc->p_pid);
   lock_release(p->lock);
+  splx(spl);
   thread_exit();
 
   panic("thread_exit returned (should not happen)\n");
@@ -53,9 +60,14 @@ sys_waitpid(pid_t pid, userptr_t statusp, int options)
 {
   struct proc *p = proc_search_pid(pid);
   int s;
+  (void)statusp;
+  //kprintf("Process %d waits for %d\n",curproc->p_pid,pid);
   (void)options; /* not handled */
   if (p==NULL) return -1;
   s = proc_wait(p);
+  
+  //kprintf("GOOD: process %d exited the proc wait of %d\n", curproc->p_pid, pid);
+  // kprintf("Wait for %d completed\n",pid);
   if (statusp!=NULL) 
     *(int*)statusp = s;
   return pid;
@@ -79,8 +91,13 @@ call_enter_forked_process(void *tfv, unsigned long dummy) {
 }
 
 int sys_fork(struct trapframe *ctf, pid_t *retval) {
+
+  int spl = splhigh(); // so that the control does nit pass to another waiting process.
   struct trapframe *tf_child;
   struct proc *newp;
+  #if OPT_PROJECT
+  pid_t old, new;
+  #endif
   int result;
 
   KASSERT(curproc != NULL);
@@ -90,13 +107,26 @@ int sys_fork(struct trapframe *ctf, pid_t *retval) {
     return ENOMEM;
   }
 
+  #if OPT_PROJECT
+  old=curproc->p_pid;
+  new=newp->p_pid;
+  #endif
+
   /* done here as we need to duplicate the address space 
      of the current process */
+  #if OPT_PROJECT
+  as_copy(curproc->p_addrspace, &(newp->p_addrspace), old, new);
+  if(newp->p_addrspace == NULL){
+    proc_destroy(newp); 
+    return ENOMEM; 
+  }
+  #else
   as_copy(curproc->p_addrspace, &(newp->p_addrspace));
   if(newp->p_addrspace == NULL){
     proc_destroy(newp); 
     return ENOMEM; 
   }
+  #endif
 
   /* we need a copy of the parent's trapframe */
   tf_child = kmalloc(sizeof(struct trapframe));
@@ -109,6 +139,7 @@ int sys_fork(struct trapframe *ctf, pid_t *retval) {
   /* TO BE DONE: linking parent/child, so that child terminated 
      on parent exit */
 
+  splx(spl);
   result = thread_fork(
 		 curthread->t_name, newp,
 		 call_enter_forked_process, 

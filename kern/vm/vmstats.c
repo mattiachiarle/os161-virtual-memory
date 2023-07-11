@@ -16,13 +16,13 @@ void init_stat(void){
 }
 
 uint32_t tlb_fault_stats(void){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     uint32_t s =  stat.tlb_faults;
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
     return s;
 }
 uint32_t tlb_type_fault_stats(int type){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     uint32_t s=0;
     switch (type)
     {
@@ -35,25 +35,25 @@ uint32_t tlb_type_fault_stats(int type){
     default:
         break;
     }
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
     return s;
 }
 
 uint32_t invalidation_stat(void){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     uint32_t s = stat.tlb_invalidations;
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
     return s;
 }
 uint32_t reloads_stat(void){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     uint32_t s = stat.tlb_reloads;
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
     return s;
 }
 
 uint32_t pt_fault_stats(int type){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     uint32_t s=0;
     switch (type)
     {
@@ -73,24 +73,24 @@ uint32_t pt_fault_stats(int type){
     default:
         break;
     }
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
     return s;
 }
 uint32_t swap_write_stat(void){
     uint32_t s;
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     s = stat.swap_writes;
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
     return s;
 }
 /*UTILITY FUNCTIONS*/
 void add_tlb_fault(void){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     stat.tlb_faults++;
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
 }
 void add_tlb_type_fault(int type){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     //add_tlb_fault(); ??? where do I do that
     switch (type)
     {
@@ -104,22 +104,22 @@ void add_tlb_type_fault(int type){
     default:
         break;
     }
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
 }
 void add_tlb_invalidation(void){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     stat.tlb_invalidations++;
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
 }
 
 void add_tlb_reload(void){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     stat.tlb_reloads++;
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
 }
 
 void add_pt_type_fault(int type){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     switch (type)
         {
         case ZEROED:
@@ -138,13 +138,13 @@ void add_pt_type_fault(int type){
         default:
             break;
         }
-        spinlock_release(&stat.lock);
+        //spinlock_release(&stat.lock);
  
 }
 void add_swap_writes(void){
-    spinlock_acquire(&stat.lock);
+    //spinlock_acquire(&stat.lock);
     stat.swap_writes++;
-    spinlock_release(&stat.lock);
+    //spinlock_release(&stat.lock);
 }
 
 void print_stats(void){

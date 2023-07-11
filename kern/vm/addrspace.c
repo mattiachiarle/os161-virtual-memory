@@ -65,7 +65,7 @@ as_create(void)
 }
 
 int
-as_copy(struct addrspace *old, struct addrspace **ret)
+as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp)
 {
 	struct addrspace *newas;
 
@@ -82,9 +82,13 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	newas->as_npages1 = old->as_npages1;
 	newas->as_vbase2 = old->as_vbase2;
 	newas->as_npages2 = old->as_npages2;
+	newas->ph1 = old->ph1;
+	newas->ph2 = old->ph2;
+	newas->v = old->v;
 
-	//TBD copy swap pages
 	//TBD copy page table pages
+	copy_pt_entries(oldp, newp);
+	copy_swap_pages(oldp, newp);
 
 	*ret = newas;
 	return 0;
@@ -93,14 +97,9 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 void
 as_destroy(struct addrspace *as)
 {
-	struct proc *proc = curproc;
-
 	/*
 	 * Clean up as needed.
 	 */
-
-	free_pages(proc->p_pid);
-	remove_process_from_swap(proc->p_pid);
 
 	kfree(as);
 }
@@ -239,8 +238,8 @@ int as_is_ok(){
 }
 
 void vm_bootstrap(void){
-	pt_init();
 	swap_init();
+	pt_init();
 }
 
 void vm_tlbshootdown(const struct tlbshootdown *ts){
@@ -264,7 +263,10 @@ getppages(unsigned long npages)
 }
 
 vaddr_t alloc_kpages(unsigned npages){
+	
 	paddr_t p;
+
+	//int spl = splhigh();
 
 	spinlock_acquire(&stealmem_lock);
 	
@@ -272,27 +274,37 @@ vaddr_t alloc_kpages(unsigned npages){
 		p = getppages(npages);
 	}
 	else{
+		spinlock_release(&stealmem_lock);
 		p = get_contiguous_pages(npages);
+		spinlock_acquire(&stealmem_lock);
 	}
 
 	spinlock_release(&stealmem_lock);
+
+	//splx(spl);
 
 	return PADDR_TO_KVADDR(p);
 }
 
 void free_kpages(vaddr_t addr){
 
+	int spl = splhigh();
+
 	spinlock_acquire(&stealmem_lock);
 
-	if(!pt_active){
+	if(!pt_active && addr < PADDR_TO_KVADDR(peps.firstfreepaddr)){
 		//Currently we accept a memory leak since the cost of having an additional data structure would be more expensive than the potential memory leaks that could occur
 		//Alternative: move contiguous in another place (coremap.c?)
 	}
 	else{
+		spinlock_release(&stealmem_lock);
 		free_contiguous_pages(addr);
+		spinlock_acquire(&stealmem_lock);
 	}
 
 	spinlock_release(&stealmem_lock);
+
+	splx(spl);
 }
 
 void addrspace_init(void){

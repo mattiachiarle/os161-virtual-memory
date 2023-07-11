@@ -15,6 +15,7 @@
 #include "opt-sw_list.h"
 #include "vm.h"
 #include "opt-debug.h"
+#include "spl.h"
 
 /**
  * Data structure to store the association 
@@ -81,5 +82,13 @@ int swap_init(void);
  * @param pid_t: pid of the ended process.
 */
 void remove_process_from_swap(pid_t);
+
+/**
+ * When a fork is executed, we copy all the pages of the old process for the new process too.
+ * 
+ * @param pid_t: pid of the old process.
+ * @param pid_t: pid of the new process.
+*/
+void copy_swap_pages(pid_t, pid_t);
 
 #endif /* _SWAPFILE_H_ */

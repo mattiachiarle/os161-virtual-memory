@@ -62,6 +62,8 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
         return 0; //load_swap takes care of loading too, so we just return.
     }
 
+	//kprintf("Process %d tries to read ELF\n",pid);
+
     //If we arrive here the page wasn't found in the swapfile, so we must read it from the elf file.
 
 	/**
@@ -152,7 +154,7 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 	 * Error (access outside the address space)
      * End the program for illegal access
 	*/
-    kprintf("-------SEGMENTATION FAULT---------");
+    kprintf("SEGMENTATION FAULT: process %d accessed 0x%x\n",pid,vaddr);
 
     sys__exit(-1);
 

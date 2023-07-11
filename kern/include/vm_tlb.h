@@ -13,6 +13,8 @@ struct tlb{
 
 };
 
+pid_t old_pid;
+
 /*
  * This function is called after a TLB miss, and it's used to remove
  * an entry from the TLB to store the new one.
