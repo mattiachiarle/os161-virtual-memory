@@ -5,6 +5,8 @@
 #include "syscall.h"
 #include "proc.h"
 
+pid_t previous_pid;
+
 /*
  * Data structure to manage the algorithm used in tlb_remove.
  *
