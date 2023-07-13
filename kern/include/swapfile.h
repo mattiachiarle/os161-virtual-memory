@@ -49,6 +49,8 @@ struct swap_cell{
     #if OPT_SW_LIST
     struct swap_cell *next;
     paddr_t offset;//Offset of the swap element within the swapfile
+    struct cv *cell_cv;
+    struct lock *cell_lock;
     #else
     pid_t pid; //Pid of the process that owns that page. If pid=-1 the page is free
     #endif
@@ -102,5 +104,7 @@ void prepare_copy_swap(pid_t, pid_t);
 void end_copy_swap(pid_t);
 
 void print_list(pid_t);
+
+void clear_swap(void);
 
 #endif /* _SWAPFILE_H_ */

@@ -20,7 +20,8 @@ struct pt_entry
     pid_t pid;    // processID
     uint8_t ctl;  // some bits for control; from the lower:  Validity bit, Reference bit, isInTLB bit, ...
                  //  could be added other bits
-    // add a lock here
+    struct lock *entry_lock;
+    struct cv *entry_cv;
 } entr;
 
 struct ptInfo
@@ -106,5 +107,7 @@ void copy_pt_entries(pid_t, pid_t);
 void prepare_copy_pt(pid_t);
 
 void end_copy_pt(pid_t);
+
+void free_forgotten_pages(void);
 
 #endif

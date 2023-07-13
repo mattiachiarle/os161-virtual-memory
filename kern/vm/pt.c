@@ -69,6 +69,10 @@ void pt_init(void)
     {
         peps.pt[i].ctl = 0;
         peps.contiguous[i]=-1;
+        spinlock_release(&stealmem_lock);
+        peps.pt[i].entry_lock = lock_create("entry_lock");
+        peps.pt[i].entry_cv = cv_create("entry_cv");
+        spinlock_acquire(&stealmem_lock);
     }
 
     peps.firstfreepaddr = ram_stealmem(0);
@@ -196,6 +200,9 @@ paddr_t get_page(vaddr_t v, int spl)
     //spinlock_release(&peps.test);
     load_page(v, pid, pp, spl);
     peps.pt[pos].ctl = IOBITZERO(peps.pt[pos].ctl);
+    lock_acquire(peps.pt[pos].entry_lock);
+    cv_broadcast(peps.pt[pos].entry_cv,peps.pt[pos].entry_lock);
+    lock_release(peps.pt[pos].entry_lock);
     peps.pt[pos].ctl = TLBBITONE(peps.pt[pos].ctl);
     // peps.pt[pos].ctl = VALBITONE(peps.pt[pos].ctl);
     //lock_acquire(peps.ptlock);
@@ -222,12 +229,14 @@ int pt_get_paddr(vaddr_t v, pid_t p, int spl)
             validity = GETVALBIT(peps.pt[i].ctl);
                 if (v == peps.pt[i].page && peps.pt[i].pid == p && validity)
                 {
+                    lock_acquire(peps.pt[i].entry_lock);
                     while(GETIOBIT(peps.pt[i].ctl)){
                         stopped=1;
                         splx(spl);
-                        thread_yield();
+                        cv_wait(peps.pt[i].entry_cv,peps.pt[i].entry_lock);
                         spl = splhigh();
                     }
+                    lock_release(peps.pt[i].entry_lock);
                     if (v != peps.pt[i].page || peps.pt[i].pid != p || !GETVALBIT(peps.pt[i].ctl)){
                         continue;
                     }
@@ -262,6 +271,7 @@ void free_pages(pid_t p)
             KASSERT(!GETIOBIT(peps.pt[i].ctl));
             peps.pt[i].ctl = 0;
             peps.pt[i].page = 0;
+            peps.pt[i].pid = 0;
         }
     }
     // V(peps.sem);
@@ -336,6 +346,9 @@ paddr_t get_contiguous_pages(int npages){
         {
             pos = find_victim(KMALLOC_PAGE, curproc->p_pid);
             peps.pt[pos].ctl = IOBITZERO(peps.pt[pos].ctl);
+            lock_acquire(peps.pt[pos].entry_lock);
+            cv_broadcast(peps.pt[pos].entry_cv,peps.pt[pos].entry_lock);
+            lock_release(peps.pt[pos].entry_lock);
             KASSERT(pos<peps.ptSize);
             pp = peps.firstfreepaddr + pos*PAGE_SIZE;
         }
@@ -448,6 +461,9 @@ paddr_t get_contiguous_pages(int npages){
                             store_swap(old_v,old_pid,j * PAGE_SIZE + peps.firstfreepaddr);
                             P(peps.sem);
                             peps.pt[j].ctl = IOBITZERO(peps.pt[j].ctl);
+                            lock_acquire(peps.pt[j].entry_lock);
+                            cv_broadcast(peps.pt[j].entry_cv,peps.pt[j].entry_lock);
+                            lock_release(peps.pt[j].entry_lock);
                             //lock_acquire(peps.ptlock);
                         }
                     }
@@ -545,6 +561,9 @@ void copy_pt_entries(pid_t old, pid_t new){
                 // kprintf("Copied from pt address 0x%x for process %d\n",peps.pt[i].page,new);
                 store_swap(peps.pt[i].page,new,peps.firstfreepaddr+i*PAGE_SIZE);
                 peps.pt[i].ctl = IOBITZERO(peps.pt[i].ctl);
+                lock_acquire(peps.pt[i].entry_lock);
+                cv_broadcast(peps.pt[i].entry_cv,peps.pt[i].entry_lock);
+                lock_release(peps.pt[i].entry_lock);
                 // peps.pt[i].ctl = SWAPBITZERO(peps.pt[i].ctl);
                 //spinlock_acquire(&peps.test);
 
@@ -587,4 +606,14 @@ void end_copy_pt(pid_t pid){
         }
     }
     V(peps.sem);
+}
+
+void free_forgotten_pages(void){
+    for(int i=0;i<peps.ptSize;i++){
+        if(peps.pt[i].page==KMALLOC_PAGE && peps.pt[i].pid!=1){
+            peps.pt[i].ctl = VALBITZERO(peps.pt[i].ctl);
+            peps.pt[i].page=0;
+            peps.contiguous[i]=-1;
+        }
+    }
 }

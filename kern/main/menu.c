@@ -45,6 +45,7 @@
 #include <test.h>
 #include "opt-sfs.h"
 #include "opt-net.h"
+#include "pt.h"
 
 /*
  * In-kernel menu and command dispatcher.
@@ -116,6 +117,7 @@ common_prog(int nargs, char **args)
 {
 	struct proc *proc;
 	int result, exit_code;
+	// struct vnode *v;
 
 	/* Create a process for the new program to run in. */
 	proc = proc_create_runprogram(args[0] /* name */);
@@ -135,10 +137,14 @@ common_prog(int nargs, char **args)
 	else{
 		pid_t pid;
 		pid = proc_getpid(proc);
+		// v = proc->p_addrspace->v;
 		pid_t returnpid;
 		returnpid = sys_waitpid(pid,(userptr_t)&exit_code,0);
 
 		KASSERT(returnpid==pid);
+
+		free_forgotten_pages();
+		// vfs_close(v);
 
 		kprintf("The thread exited with code %d\n",exit_code);
 	}

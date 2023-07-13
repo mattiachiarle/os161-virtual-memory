@@ -90,6 +90,7 @@ as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp, i
 	newas->ph1 = old->ph1;
 	newas->ph2 = old->ph2;
 	newas->v = old->v;
+	old->v->vn_refcount++;
 	newas->initial_offset1=old->initial_offset1;
 	newas->initial_offset2=old->initial_offset2;
 
@@ -110,6 +111,13 @@ as_destroy(struct addrspace *as)
 	/*
 	 * Clean up as needed.
 	 */
+	if(as->v->vn_refcount==1){
+		vfs_close(as->v);
+	}
+	else{
+		as->v->vn_refcount--;
+	}
+
 
 	kfree(as);
 }
@@ -263,8 +271,11 @@ void vm_tlbshootdown(const struct tlbshootdown *ts){
 
 void vm_shutdown(void){
 	for(int i=0;i<peps.ptSize;i++){
+		if(peps.pt[i].ctl!=0){
+			kprintf("Entry%d has not been freed! ctl=%d, pid=%d\n",i,peps.pt[i].ctl,peps.pt[i].pid);
+		}
 		if(peps.pt[i].page==1){
-			kprintf("\n\nIt looks like some errors with free occurred: entry%d, process %d\n\n",i,peps.pt[i].pid);
+			kprintf("It looks like some errors with free occurred: entry%d, process %d\n",i,peps.pt[i].pid);
 		}
 	}
 
