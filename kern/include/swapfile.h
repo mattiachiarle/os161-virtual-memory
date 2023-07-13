@@ -16,6 +16,7 @@
 #include "vm.h"
 #include "opt-debug.h"
 #include "spl.h"
+#include "current.h"
 
 /**
  * Data structure to store the association 
@@ -27,12 +28,16 @@ struct swapfile{
     struct swap_cell **data;//Array of lists of data pages in the swapfile (one for each pid)
     struct swap_cell **stack;//Array of lists of stack pages in the swapfile (one for each pid)
     struct swap_cell *free;//List of free pages in the swapfile
+    struct swap_cell **start_text;
+    struct swap_cell **start_data;
+    struct swap_cell **start_stack;
     #else
     struct swap_cell *elements;//Array of lists in the swapfile (one for each pid)
     #endif
     struct vnode *v;//vnode of the swapfile
     int size;//Number of pages stored in the swapfile
     struct lock *s_lock;//Used to allow mutual exclusion on the swapfile
+    struct semaphore *s_sem;
 };
 
 /**
@@ -40,6 +45,7 @@ struct swapfile{
 */
 struct swap_cell{
     vaddr_t vaddr;//Virtual address corresponding to the stored page
+    int load,store,swap;
     #if OPT_SW_LIST
     struct swap_cell *next;
     paddr_t offset;//Offset of the swap element within the swapfile
@@ -57,7 +63,7 @@ struct swap_cell{
  * 
  * @return 1 if the page was found in the swapfile, 0 otherwise
 */
-int load_swap(vaddr_t, pid_t, paddr_t);
+int load_swap(vaddr_t, pid_t, paddr_t, int);
 
 /**
  * This function saves a frame into the swapfile.
@@ -81,7 +87,7 @@ int swap_init(void);
  * 
  * @param pid_t: pid of the ended process.
 */
-void remove_process_from_swap(pid_t);
+void remove_process_from_swap(pid_t, int);
 
 /**
  * When a fork is executed, we copy all the pages of the old process for the new process too.
@@ -89,6 +95,12 @@ void remove_process_from_swap(pid_t);
  * @param pid_t: pid of the old process.
  * @param pid_t: pid of the new process.
 */
-void copy_swap_pages(pid_t, pid_t);
+void copy_swap_pages(pid_t, pid_t, int);
+
+void prepare_copy_swap(pid_t, pid_t);
+
+void end_copy_swap(pid_t);
+
+void print_list(pid_t);
 
 #endif /* _SWAPFILE_H_ */

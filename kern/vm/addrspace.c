@@ -65,7 +65,7 @@ as_create(void)
 }
 
 int
-as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp)
+as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp, int spl)
 {
 	struct addrspace *newas;
 
@@ -78,6 +78,11 @@ as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp)
 	 * Write this.
 	 */
 
+	// KASSERT(old->as_vbase1==0x400000);
+	// KASSERT(old->as_vbase2==0x412000);
+	// KASSERT(old->as_npages1==3);
+	// KASSERT(old->as_npages2==18);
+
 	newas->as_vbase1 = old->as_vbase1;
 	newas->as_npages1 = old->as_npages1;
 	newas->as_vbase2 = old->as_vbase2;
@@ -85,10 +90,15 @@ as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp)
 	newas->ph1 = old->ph1;
 	newas->ph2 = old->ph2;
 	newas->v = old->v;
+	newas->initial_offset1=old->initial_offset1;
+	newas->initial_offset2=old->initial_offset2;
 
-	//TBD copy page table pages
+	prepare_copy_pt(oldp);
+	prepare_copy_swap(oldp,newp);
+	copy_swap_pages(newp, oldp, spl);
 	copy_pt_entries(oldp, newp);
-	copy_swap_pages(oldp, newp);
+	end_copy_pt(oldp);
+	end_copy_swap(newp);
 
 	*ret = newas;
 	return 0;
@@ -109,6 +119,8 @@ as_activate(void)
 {
 	struct addrspace *as;
 	int spl;
+	spl = splhigh();
+	//kprintf("WE ARE RUNNING PROCESS %d\n",curproc->p_pid);
 	as = proc_getas();
 	if (as == NULL) {
 		/*
@@ -118,7 +130,6 @@ as_activate(void)
 		return;
 	}
 
-	spl = splhigh();
 	tlb_invalidate_all();//Since the TLB has not a PID field, we must invalidate it each time we activate a new address space
 	splx(spl);
 }
@@ -147,14 +158,15 @@ int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 		 int readable, int writeable, int executable)
 {
-	size_t npages;
+	size_t npages, initial_offset;
 
 	/* Align the region. First, the base... */
 	memsize += vaddr & ~(vaddr_t)PAGE_FRAME;
+	initial_offset=vaddr % PAGE_SIZE;
 	vaddr &= PAGE_FRAME;
 
 	/* ...and now the length. */
-	memsize = (memsize + PAGE_SIZE - 1) & PAGE_FRAME;
+	memsize = (memsize + initial_offset + PAGE_SIZE - 1) & PAGE_FRAME;
 
 	npages = memsize / PAGE_SIZE;
 
@@ -167,6 +179,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 		DEBUG(DB_VM,"Text starts at: 0x%x\n",vaddr);
 		as->as_vbase1 = vaddr;
 		as->as_npages1 = npages;
+		as->initial_offset1=initial_offset;
 		return 0;
 	}
 
@@ -174,6 +187,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 		DEBUG(DB_VM,"Data starts at: 0x%x\n",vaddr);
 		as->as_vbase2 = vaddr;
 		as->as_npages2 = npages;
+		as->initial_offset2=initial_offset;
 		return 0;
 	}
 
@@ -248,6 +262,12 @@ void vm_tlbshootdown(const struct tlbshootdown *ts){
 }
 
 void vm_shutdown(void){
+	for(int i=0;i<peps.ptSize;i++){
+		if(peps.pt[i].page==1){
+			kprintf("\n\nIt looks like some errors with free occurred: entry%d, process %d\n\n",i,peps.pt[i].pid);
+		}
+	}
+
 	print_stats();
 }
 
@@ -266,7 +286,7 @@ vaddr_t alloc_kpages(unsigned npages){
 	
 	paddr_t p;
 
-	//int spl = splhigh();
+	int spl = splhigh();
 
 	spinlock_acquire(&stealmem_lock);
 	
@@ -281,7 +301,7 @@ vaddr_t alloc_kpages(unsigned npages){
 
 	spinlock_release(&stealmem_lock);
 
-	//splx(spl);
+	splx(spl);
 
 	return PADDR_TO_KVADDR(p);
 }
@@ -292,7 +312,7 @@ void free_kpages(vaddr_t addr){
 
 	spinlock_acquire(&stealmem_lock);
 
-	if(!pt_active && addr < PADDR_TO_KVADDR(peps.firstfreepaddr)){
+	if(!pt_active || addr < PADDR_TO_KVADDR(peps.firstfreepaddr)){
 		//Currently we accept a memory leak since the cost of having an additional data structure would be more expensive than the potential memory leaks that could occur
 		//Alternative: move contiguous in another place (coremap.c?)
 	}

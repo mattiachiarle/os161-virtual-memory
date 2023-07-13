@@ -50,7 +50,7 @@ pt_init(void);
  * physical address otherwise
  */
 
-int pt_get_paddr(vaddr_t, pid_t);
+int pt_get_paddr(vaddr_t, pid_t, int);
 
 
 /*  THIS IS THE BIG WRAPPER OF ALL OTHER FUNCS
@@ -60,7 +60,7 @@ int pt_get_paddr(vaddr_t, pid_t);
  *      IF found calls LOAD_PAGE Mattia's function
  *      ELSE calls find_victim that remove an entry and then LOAD_PAGE Mattia's function
  */
-paddr_t get_page(vaddr_t);
+paddr_t get_page(vaddr_t, int);
 
 /*
         wrapper for getpaddr
@@ -81,7 +81,7 @@ paddr_t get_page(vaddr_t);
  */
 // paddr_t load_page(vaddr_t, pid_t);
 
-paddr_t find_victim(vaddr_t, pid_t);
+int find_victim(vaddr_t, pid_t);
 
 /*
  * This function frees all the pages of a process after its termination.
@@ -102,5 +102,9 @@ void free_contiguous_pages(vaddr_t);
 //void pt_reset_tlb(void);
 
 void copy_pt_entries(pid_t, pid_t);
+
+void prepare_copy_pt(pid_t);
+
+void end_copy_pt(pid_t);
 
 #endif

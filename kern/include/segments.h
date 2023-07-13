@@ -17,6 +17,7 @@
 #include <vnode.h>
 #include <elf.h>
 #include "vmstats.h"
+#include "opt-project.h"
 
 /**
  * Given the virtual address vaddr, it finds the corresponding page and it loads it into the provided paddr.
@@ -27,6 +28,6 @@
  * 
  * @return 0 if everything goes fine, otherwise the error code returned from VOP_READ
  */
-int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr);
+int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr, int spl);
 
 #endif

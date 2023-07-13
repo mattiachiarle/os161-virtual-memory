@@ -170,7 +170,8 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 	faultaddress &= PAGE_FRAME;
 
-	DEBUG(DB_VM, "dumbvm: fault: 0x%x\n", faultaddress);
+	//DEBUG(DB_VM, 
+	// kprintf("dumbvm: fault: proc %d, 0x%x\n", curproc->p_pid,faultaddress);
 
 	switch (faulttype) {
 	    case VM_FAULT_READONLY:

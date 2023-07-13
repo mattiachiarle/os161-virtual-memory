@@ -58,7 +58,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     /*did mattia set up the as correctly?*/
     KASSERT(as_is_ok() == 1);
 
-    paddr = get_page(faultaddress);
+    paddr = get_page(faultaddress,spl);
     
     tlb_insert(faultaddress, paddr);
     splx(spl);
@@ -158,11 +158,12 @@ int tlb_invalidate_entry(paddr_t paddr){
 }
 
 void tlb_invalidate_all(void){
-    int spl = splhigh(); // so that the control does nit pass to another waiting process.
+    // int spl = splhigh(); // so that the control does nit pass to another waiting process.
     uint32_t hi, lo;
     pid_t pid = curproc->p_pid;
     if(previous_pid != pid) // the process (not the thread) changed
     {
+    //kprintf("NEW PROCESS RUNNING: %d INSTEAD OF %d\n",pid,previous_pid);
     add_tlb_invalidation();
     for(int i = 0; i<NUM_TLB; i++){
             if(tlb_entry_is_valid(i)){
@@ -173,6 +174,7 @@ void tlb_invalidate_all(void){
             }
     previous_pid = pid;
     }
+    // splx(spl);
 }
 
 void print_tlb(void){

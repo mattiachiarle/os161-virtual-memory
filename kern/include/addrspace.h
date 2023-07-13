@@ -76,6 +76,9 @@ struct addrspace {
         Elf_Phdr ph1;//Program header of the text section
         Elf_Phdr ph2;//Program header of the data section
         struct vnode *v;//vnode of the elf file
+        size_t initial_offset1;
+        size_t initial_offset2;
+        int valid;
 #endif
 };
 
@@ -121,7 +124,11 @@ struct addrspace {
  */
 
 struct addrspace *as_create(void);
-int               as_copy(struct addrspace *src, struct addrspace **ret, pid_t oldp, pid_t newp);
+#if OPT_DUMBVM
+int               as_copy(struct addrspace *src, struct addrspace **ret);
+#else
+int               as_copy(struct addrspace *src, struct addrspace **ret, pid_t oldp, pid_t newp, int spl);
+#endif
 void              as_activate(void);
 void              as_deactivate(void);
 void              as_destroy(struct addrspace *);
