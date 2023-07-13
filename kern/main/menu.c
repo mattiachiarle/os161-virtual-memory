@@ -143,7 +143,8 @@ common_prog(int nargs, char **args)
 
 		KASSERT(returnpid==pid);
 
-		free_forgotten_pages();
+		//free_forgotten_pages();
+		reorder_swapfile();
 		// vfs_close(v);
 
 		kprintf("The thread exited with code %d\n",exit_code);

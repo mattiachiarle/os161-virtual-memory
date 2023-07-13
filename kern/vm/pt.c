@@ -120,7 +120,7 @@ int find_victim(vaddr_t vaddr, pid_t pid)
             if (GETREFBIT(peps.pt[i].ctl) == 0) // if Ref bit==0 victim found
             {
                 //lock_release(peps.ptlock);
-                P(peps.sem);
+                // P(peps.sem);
                 KASSERT(!GETTLBBIT(peps.pt[i].ctl));
                 KASSERT(!GETIOBIT(peps.pt[i].ctl));
                 KASSERT(!GETSWAPBIT(peps.pt[i].ctl));
@@ -132,14 +132,14 @@ int find_victim(vaddr_t vaddr, pid_t pid)
                 peps.pt[i].ctl = VALBITONE(peps.pt[i].ctl);
                 old_v = peps.pt[i].page;
                 peps.pt[i].page = vaddr;
-                V(peps.sem);
+                // V(peps.sem);
                 store_swap(old_v,old_pid,i * PAGE_SIZE + peps.firstfreepaddr);
                 // peps.pt[i].ctl = IOBITZERO(peps.pt[i].ctl);
                 //lock_acquire(peps.ptlock);
                 //peps.pt[i].ctl = TLBBITONE(peps.pt[i].ctl);  // set isINTLB to 1
-                P(peps.sem);
-                lastIndex = (i + 1) % peps.ptSize;                          // new ptr for FIFO
-                V(peps.sem);
+                // P(peps.sem);
+                lastIndex = (i + 1) % peps.ptSize; //TODO:CHECK IF LASTINDEX IS PROPERLY SET EVERYWHERE                         // new ptr for FIFO
+                // V(peps.sem);
                 return i; // return paddr of that frame
             }
             else
@@ -380,7 +380,7 @@ paddr_t get_contiguous_pages(int npages){
         panic("Not enough memory for kmalloc");
     }
 
-    P(peps.sem);
+    // P(peps.sem);
 
     for(i=0;i<peps.ptSize;i++){
         valid = GETVALBIT(peps.pt[i].ctl);
@@ -409,17 +409,17 @@ paddr_t get_contiguous_pages(int npages){
             //kprintf("New kmalloc number after get=%d\n",nkmalloc);
             //spinlock_release(&peps.test);
             //lock_release(peps.ptlock);
-            V(peps.sem);
+            // V(peps.sem);
             //kprintf("process %d V in get_contiguous_pages 1\n", curproc->p_pid);
             return first*PAGE_SIZE + peps.firstfreepaddr;
         }
     }
 
-    V(peps.sem);
+    // V(peps.sem);
 
     //MISSING: KMALLOC WITH FULL PAGE TABLE
 
-    P(peps.sem);
+    // P(peps.sem);
 
     if(nfork==0){
         // kprintf("FIRST FORK WITH REPLACE\n");
@@ -457,9 +457,9 @@ paddr_t get_contiguous_pages(int npages){
                         if(old_val){
                             //lock_release(peps.ptlock);
                             peps.pt[j].ctl = IOBITONE(peps.pt[j].ctl);
-                            V(peps.sem);
+                            // V(peps.sem);
                             store_swap(old_v,old_pid,j * PAGE_SIZE + peps.firstfreepaddr);
-                            P(peps.sem);
+                            // P(peps.sem);
                             peps.pt[j].ctl = IOBITZERO(peps.pt[j].ctl);
                             lock_acquire(peps.pt[j].entry_lock);
                             cv_broadcast(peps.pt[j].entry_cv,peps.pt[j].entry_lock);
@@ -471,7 +471,7 @@ paddr_t get_contiguous_pages(int npages){
                     lastIndex = (i + 1) % peps.ptSize;
                     // spinlock_release(&peps.test);
                     //lock_release(peps.ptlock);
-                    V(peps.sem);
+                    // V(peps.sem);
                     //kprintf("process %d V in get_contiguous_pages 2\n", curproc->p_pid);
                     return first*PAGE_SIZE + peps.firstfreepaddr;
                 }
@@ -482,7 +482,7 @@ paddr_t get_contiguous_pages(int npages){
     }
     // spinlock_release(&peps.test);
     //lock_release(peps.ptlock);
-    V(peps.sem);
+    // V(peps.sem);
     //kprintf("process %d V in get_contiguous_pages 3\n", curproc->p_pid);
     // splx(spl);
 
@@ -587,25 +587,25 @@ void copy_pt_entries(pid_t old, pid_t new){
 }
 
 void prepare_copy_pt(pid_t pid){
-    P(peps.sem);
+    // P(peps.sem);
     for(int i=0;i<peps.ptSize;i++){
         if(peps.pt[i].pid == pid && peps.pt[i].page!=KMALLOC_PAGE && GETVALBIT(peps.pt[i].ctl)){
             KASSERT(!GETIOBIT(peps.pt[i].ctl));
             peps.pt[i].ctl = SWAPBITONE(peps.pt[i].ctl);
         }
     }
-    V(peps.sem);
+    // V(peps.sem);
 }
 
 void end_copy_pt(pid_t pid){
-    P(peps.sem);
+    // P(peps.sem);
     for(int i=0;i<peps.ptSize;i++){
         if(peps.pt[i].pid == pid && peps.pt[i].page!=KMALLOC_PAGE && GETVALBIT(peps.pt[i].ctl)){
             KASSERT(GETSWAPBIT(peps.pt[i].ctl));
             peps.pt[i].ctl = SWAPBITZERO(peps.pt[i].ctl);
         }
     }
-    V(peps.sem);
+    // V(peps.sem);
 }
 
 void free_forgotten_pages(void){

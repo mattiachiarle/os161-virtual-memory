@@ -297,7 +297,7 @@ vaddr_t alloc_kpages(unsigned npages){
 	
 	paddr_t p;
 
-	int spl = splhigh();
+	// int spl = splhigh();
 
 	spinlock_acquire(&stealmem_lock);
 	
@@ -312,7 +312,7 @@ vaddr_t alloc_kpages(unsigned npages){
 
 	spinlock_release(&stealmem_lock);
 
-	splx(spl);
+	// splx(spl);
 
 	return PADDR_TO_KVADDR(p);
 }

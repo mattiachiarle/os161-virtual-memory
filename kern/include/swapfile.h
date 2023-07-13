@@ -105,6 +105,6 @@ void end_copy_swap(pid_t);
 
 void print_list(pid_t);
 
-void clear_swap(void);
+void reorder_swapfile(void);
 
 #endif /* _SWAPFILE_H_ */

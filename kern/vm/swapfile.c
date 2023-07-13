@@ -79,7 +79,6 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr, int spl){
             KASSERT(!list->load);
             KASSERT(!list->swap);
             list->vaddr=1;
-            list->load=1;
 
             if(prev!=NULL){
                 KASSERT(prev->next==list);
@@ -105,6 +104,8 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr, int spl){
                 spl = splhigh();
             }
             lock_release(list->cell_lock);
+
+            list->load=1;
             
             //DEBUG(DB_VM,
             // kprintf("LOAD SWAP in 0x%x (virtual: 0x%x) for process %d\n",list->offset, vaddr, pid);
@@ -119,7 +120,7 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr, int spl){
             if(result){
                 panic("VOP_READ in swapfile failed, with result=%d",result);
             }
-            P(swap->s_sem);
+            // P(swap->s_sem);
             list->load=0;
             // kprintf("ENDED LOAD SWAP in 0x%x (virtual: 0x%x) for process %d\n",list->offset, list->vaddr, pid);
             // lock_release(swap->s_lock);
@@ -133,7 +134,7 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr, int spl){
             list->vaddr=0;
 
             // print_list(pid);
-            V(swap->s_sem);
+            // V(swap->s_sem);
 
             //lock_release(swap->s_lock);
 
@@ -143,11 +144,11 @@ int load_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr, int spl){
 
             return 1;//We found the entry in the swapfile, so we return 1
         }
-        P(swap->s_sem);
+        // P(swap->s_sem);
         prev=list;
         list=list->next;
         KASSERT(prev->next==list);
-        V(swap->s_sem);
+        // V(swap->s_sem);
     }
 
     #else
@@ -202,7 +203,7 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
     struct iovec iov;
     struct uio ku;
 
-    P(swap->s_sem);
+    // P(swap->s_sem);
 
     #if OPT_SW_LIST
 
@@ -262,7 +263,7 @@ int store_swap(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
     free_frame->store=1;
 
-    V(swap->s_sem);
+    // V(swap->s_sem);
 
     uio_kinit(&iov,&ku,(void*)PADDR_TO_KVADDR(paddr),PAGE_SIZE,free_frame->offset,UIO_WRITE);
 
@@ -454,7 +455,7 @@ void remove_process_from_swap(pid_t pid, int spl){
 
     //lock_acquire(swap->s_lock);
 
-    P(swap->s_sem);
+    // P(swap->s_sem);
 
     #if OPT_SW_LIST
     struct swap_cell *elem, *next;
@@ -465,7 +466,7 @@ void remove_process_from_swap(pid_t pid, int spl){
             r++;
         }
         for(elem=swap->text[pid];elem!=NULL;elem=next){
-            V(swap->s_sem);
+            // V(swap->s_sem);
             lock_acquire(elem->cell_lock);
             while(elem->store){
                 splx(spl);
@@ -473,7 +474,7 @@ void remove_process_from_swap(pid_t pid, int spl){
                 spl = splhigh();
             }
             lock_release(elem->cell_lock);
-            P(swap->s_sem);
+            // P(swap->s_sem);
             if(elem->load || elem->swap){
                 // kprintf("Error with swap freeing text for process %d, paddr 0x%x, vaddr 0x%x, active=%d, swap=%d\n",curproc->p_pid,elem->offset,elem->vaddr,elem->active,elem->swap);
             }
@@ -491,7 +492,7 @@ void remove_process_from_swap(pid_t pid, int spl){
             r++;
         }
         for(elem=swap->data[pid];elem!=NULL;elem=next){
-            V(swap->s_sem);
+            // V(swap->s_sem);
             lock_acquire(elem->cell_lock);
             while(elem->store){
                 splx(spl);
@@ -499,7 +500,7 @@ void remove_process_from_swap(pid_t pid, int spl){
                 spl = splhigh();
             }
             lock_release(elem->cell_lock);
-            P(swap->s_sem);
+            // P(swap->s_sem);
             if(elem->load || elem->swap){
                 // kprintf("Error with swap freeing data for process %d, paddr 0x%x, vaddr 0x%x, active=%d, swap=%d\n",curproc->p_pid,elem->offset,elem->vaddr,elem->active,elem->swap);
             }
@@ -517,7 +518,7 @@ void remove_process_from_swap(pid_t pid, int spl){
             r++;
         }
         for(elem=swap->stack[pid];elem!=NULL;elem=next){
-            V(swap->s_sem);
+            // V(swap->s_sem);
             lock_acquire(elem->cell_lock);
             while(elem->store){
                 splx(spl);
@@ -525,7 +526,7 @@ void remove_process_from_swap(pid_t pid, int spl){
                 spl = splhigh();
             }
             lock_release(elem->cell_lock);
-            P(swap->s_sem);
+            // P(swap->s_sem);
             if(elem->load || elem->swap){
                 // kprintf("Error with swap freeing stack for process %d, paddr 0x%x, vaddr 0x%x, active=%d, swap=%d\n",curproc->p_pid,elem->offset,elem->vaddr,elem->active,elem->swap);
             }
@@ -537,7 +538,7 @@ void remove_process_from_swap(pid_t pid, int spl){
         swap->stack[pid]=NULL;
     }
 
-    V(swap->s_sem);
+    // V(swap->s_sem);
 
     //print_list(pid);
 
@@ -592,7 +593,7 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid, int spl){
         // flag=1;
         for(ptr = swap->start_text[new_pid], free = swap->text[new_pid]; ptr!=NULL; ptr=ptr->next, free=free->next){
             KASSERT(ptr->swap==1);
-            P(swap->s_sem);
+            // P(swap->s_sem);
             // free=swap->free;
 
             if(free==NULL){
@@ -614,7 +615,7 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid, int spl){
             // KASSERT(ptr->vaddr!=1);
             KASSERT(free->vaddr!=1);
             KASSERT(!ptr->load);
-            V(swap->s_sem);
+            // V(swap->s_sem);
             lock_acquire(ptr->cell_lock);
             while(ptr->store){
                 splx(spl);
@@ -661,7 +662,7 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid, int spl){
         // flag=1;
         for(ptr = swap->start_data[new_pid], free = swap->data[new_pid]; ptr!=NULL; ptr=ptr->next, free=free->next){
             KASSERT(ptr->swap==1);
-            P(swap->s_sem);
+            // P(swap->s_sem);
             // free=swap->free;
 
             if(free==NULL){
@@ -683,7 +684,7 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid, int spl){
             // KASSERT(ptr->vaddr!=1);
             KASSERT(free->vaddr!=1);
             KASSERT(!ptr->load);
-            V(swap->s_sem);
+            // V(swap->s_sem);
             lock_acquire(ptr->cell_lock);
             while(ptr->store){
                 splx(spl);
@@ -727,7 +728,7 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid, int spl){
         // flag=1;
         for(ptr = swap->start_stack[new_pid], free = swap->stack[new_pid]; ptr!=NULL; ptr=ptr->next, free=free->next){
             KASSERT(ptr->swap==1);
-            P(swap->s_sem);
+            // P(swap->s_sem);
             // free=swap->free;
 
             if(free==NULL){
@@ -749,7 +750,7 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid, int spl){
             // KASSERT(ptr->vaddr!=1);
             KASSERT(free->vaddr!=1);
             KASSERT(!ptr->load);
-            V(swap->s_sem);
+            // V(swap->s_sem);
             lock_acquire(ptr->cell_lock);
             while(ptr->store){
                 splx(spl);
@@ -834,7 +835,7 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid, int spl){
 
 void prepare_copy_swap(pid_t old, pid_t new){
     struct swap_cell *tmp,*f;
-    P(swap->s_sem);
+    // P(swap->s_sem);
 
     swap->start_text[new]=swap->text[old];
     swap->start_data[new]=swap->data[old];
@@ -874,14 +875,14 @@ void prepare_copy_swap(pid_t old, pid_t new){
         }
     }
 
-    V(swap->s_sem);
+    // V(swap->s_sem);
     
 }
 
 void end_copy_swap(pid_t newp){
     struct swap_cell *tmp;
 
-    P(swap->s_sem);
+    // P(swap->s_sem);
 
     for(tmp=swap->start_text[newp];tmp!=NULL;tmp=tmp->next){
         if(tmp!=NULL){
@@ -902,5 +903,14 @@ void end_copy_swap(pid_t newp){
         }
     }
 
-    V(swap->s_sem);
+    // V(swap->s_sem);
+}
+
+void reorder_swapfile(void){
+    struct swap_cell *tmp=swap->free;
+
+    for(int i=0; i<swap->size && tmp!=NULL; i++){
+        tmp->offset=i*PAGE_SIZE;
+        tmp=tmp->next;
+    }
 }
