@@ -32,6 +32,7 @@ options sfs			# Always use the file system
 #options netfs			# You might write this as a project.
 
 #options dumbvm			# Chewing gum and baling wire.
+#options dumbvm			# Chewing gum and baling wire.
 #options test
 options project
 options sw_list

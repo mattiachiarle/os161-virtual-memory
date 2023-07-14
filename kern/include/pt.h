@@ -1,7 +1,6 @@
 #ifndef _PT_H_
 #define _PT_H_
 
-
 #include "types.h"
 #include "addrspace.h"
 #include "kern/errno.h"
@@ -38,11 +37,26 @@ struct ptInfo
     // struct semaphore *sem;
 } peps;
 
+struct hashentry  // single entry of hashtable
+{
+    int iptentry;   // "ptr" to IPT entry
+    vaddr_t vad;    
+    pid_t pid;
+    struct hashentry *next;  //ptr to next hashentry
+};
+
+struct hashT   // struct   
+{
+    struct hashentry **table;   // array of list of hashentry with dimension size.
+    int size; // 1.3 times the IPT
+} htable;
+
+struct hashentry *unusedptrlist;  // list where all unused blocks are stored
+
 /*
  * PT INIT
  */
-void
-pt_init(void);
+void pt_init(void);
 
 /*
  * This function converts a logical address into a physical one.
@@ -55,7 +69,6 @@ pt_init(void);
  */
 
 int pt_get_paddr(vaddr_t, pid_t, int);
-
 
 /*  THIS IS THE BIG WRAPPER OF ALL OTHER FUNCS
  * find the cur PID and calls getpaddr that returns something.
@@ -96,10 +109,15 @@ int find_victim(vaddr_t, pid_t, int);
  */
 void free_pages(pid_t);
 
+void add_in_hash(vaddr_t, pid_t, int);
 
 int cabodi(vaddr_t, pid_t);
 
 paddr_t get_contiguous_pages(int, int);
+
+int free_hash(struct hashentry **, pid_t);
+
+int get_index_from_hash(vaddr_t, pid_t);
 
 void free_contiguous_pages(vaddr_t);
 
@@ -114,5 +132,11 @@ void end_copy_pt(pid_t);
 void free_forgotten_pages(void);
 
 void print_nkmalloc(void);
+
+void retrieve_from_hash(vaddr_t, pid_t);
+
+void pt_reset_tlb(void);
+
+int get_hash_func(vaddr_t, pid_t);
 
 #endif
