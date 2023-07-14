@@ -1,7 +1,6 @@
 #ifndef _PT_H_
 #define _PT_H_
 
-
 #include "types.h"
 #include "addrspace.h"
 #include "kern/errno.h"
@@ -17,7 +16,7 @@ struct pt_entry
     vaddr_t page; // virt page in the frame
     pid_t pid;    // processID
     uint8_t ctl;  // some bits for control; from the lower:  Validity bit, Reference bit, isInTLB bit, ...
-                 //  could be added other bits
+                  //  could be added other bits
     // add a lock here
 } entr;
 
@@ -30,11 +29,26 @@ struct ptInfo
     int *contiguous;
 } peps;
 
+struct hashentry
+{
+    int iptentry;
+    vaddr_t vad;
+    pid_t pid;
+    struct hashentry *next;
+};
+
+struct hashT
+{
+    struct hashentry **table;
+    int size; // 1.3 times the IPT
+} htable;
+
+struct hashentry *unusedptrlist;
+
 /*
  * PT INIT
  */
-void
-pt_init(void);
+void pt_init(void);
 
 /*
  * This function converts a logical address into a physical one.
@@ -47,7 +61,6 @@ pt_init(void);
  */
 
 int pt_get_paddr(vaddr_t, pid_t);
-
 
 /*  THIS IS THE BIG WRAPPER OF ALL OTHER FUNCS
  * find the cur PID and calls getpaddr that returns something.
@@ -88,13 +101,22 @@ paddr_t find_victim(vaddr_t, pid_t);
  */
 void free_pages(pid_t);
 
+void add_in_hash(vaddr_t, pid_t, int);
 
 int cabodi(vaddr_t);
 
+int free_hash(struct hashentry **, pid_t);
+
 paddr_t get_contiguous_pages(int);
+
+int get_index_from_hash(vaddr_t, pid_t);
 
 void free_contiguous_pages(vaddr_t);
 
+void retrieve_from_hash(vaddr_t, pid_t);
+
 void pt_reset_tlb(void);
+
+int get_hash_func(vaddr_t, pid_t);
 
 #endif
