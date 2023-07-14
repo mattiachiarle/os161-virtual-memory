@@ -294,10 +294,10 @@ getppages(unsigned long npages)
 }
 
 vaddr_t alloc_kpages(unsigned npages){
+
+	int spl = splhigh();
 	
 	paddr_t p;
-
-	// int spl = splhigh();
 
 	spinlock_acquire(&stealmem_lock);
 	
@@ -307,13 +307,13 @@ vaddr_t alloc_kpages(unsigned npages){
 	else{
 		nkmalloc+=npages;
 		spinlock_release(&stealmem_lock);
-		p = get_contiguous_pages(npages);
+		p = get_contiguous_pages(npages, spl);
 		spinlock_acquire(&stealmem_lock);
 	}
 
 	spinlock_release(&stealmem_lock);
 
-	// splx(spl);
+	splx(spl);
 
 	return PADDR_TO_KVADDR(p);
 }

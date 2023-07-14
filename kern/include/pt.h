@@ -7,6 +7,7 @@
 #include "kern/errno.h"
 #include "synch.h"
 #include "spl.h"
+#include "opt-debug.h"
 
 int pt_active;
 int nkmalloc;
@@ -30,10 +31,11 @@ struct ptInfo
     struct pt_entry *pt; // our IPT
     int ptSize;          // IPT size, in number of pte
     paddr_t firstfreepaddr;
-    struct lock *ptlock;
+    struct lock *pt_lock;
+    struct cv *pt_cv;
     int *contiguous;
-    struct spinlock test;
-    struct semaphore *sem;
+    // struct spinlock test;
+    // struct semaphore *sem;
 } peps;
 
 /*
@@ -83,7 +85,7 @@ paddr_t get_page(vaddr_t, int);
  */
 // paddr_t load_page(vaddr_t, pid_t);
 
-int find_victim(vaddr_t, pid_t);
+int find_victim(vaddr_t, pid_t, int);
 
 /*
  * This function frees all the pages of a process after its termination.
@@ -97,7 +99,7 @@ void free_pages(pid_t);
 
 int cabodi(vaddr_t, pid_t);
 
-paddr_t get_contiguous_pages(int);
+paddr_t get_contiguous_pages(int, int);
 
 void free_contiguous_pages(vaddr_t);
 

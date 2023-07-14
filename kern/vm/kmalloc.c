@@ -1170,7 +1170,6 @@ subpage_kfree(void *ptr)
 void *
 kmalloc(size_t sz)
 {
-	int spl = splhigh();
 	size_t checksz;
 #ifdef LABELS
 	vaddr_t label;
@@ -1193,11 +1192,9 @@ kmalloc(size_t sz)
 		npages = (sz + PAGE_SIZE - 1)/PAGE_SIZE;
 		address = alloc_kpages(npages);
 		if (address==0) {
-			splx(spl);
 			return NULL;
 		}
 		KASSERT(address % PAGE_SIZE == 0);
-		splx(spl);
 		return (void *)address;
 	}
 
@@ -1205,7 +1202,6 @@ kmalloc(size_t sz)
 	return subpage_kmalloc(sz, label);
 #else
 	void* ret = subpage_kmalloc(sz);
-	splx(spl);
 	return ret;
 #endif
 }
