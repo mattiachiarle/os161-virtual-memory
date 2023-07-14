@@ -29,21 +29,21 @@ struct ptInfo
     int *contiguous;
 } peps;
 
-struct hashentry
+struct hashentry  // single entry of hashtable
 {
-    int iptentry;
-    vaddr_t vad;
+    int iptentry;   // "ptr" to IPT entry
+    vaddr_t vad;    
     pid_t pid;
-    struct hashentry *next;
+    struct hashentry *next;  //ptr to next hashentry
 };
 
-struct hashT
+struct hashT   // struct   
 {
-    struct hashentry **table;
+    struct hashentry **table;   // array of list of hashentry with dimension size.
     int size; // 1.3 times the IPT
 } htable;
 
-struct hashentry *unusedptrlist;
+struct hashentry *unusedptrlist;  // list where all unused blocks are stored
 
 /*
  * PT INIT

@@ -70,26 +70,26 @@ void pt_init(void)
     peps.ptSize = ((mainbus_ramsize() - ram_stealmem(0)) / PAGE_SIZE) - 1;
 
     // kprintf("\n\n%d\n\n", peps.ptSize*1.3);
-    int part = 1.3;                                                   // peps.ptSize * 2;
-    htable.size = (int)part * peps.ptSize;                            // size of hash table
+    int part = 1.3;     
+    htable.size = (int)part * peps.ptSize;  // size of hash table
     htable.table = kmalloc(sizeof(struct hashentry *) * htable.size); // alloc hash table
-    for (int ii = 0; ii < htable.size; ii++)
+    for (int ii = 0; ii < htable.size; ii++) 
     {
-        htable.table[ii] = NULL; // no pointers for now
+        htable.table[ii] = NULL; // no pointers for now inside the array of lists
     }
 
-    unusedptrlist = NULL;
-    struct hashentry *tmp;
-    for (int jj = 0; jj < /*htable.size*/ peps.ptSize; jj++) // initialize unused ptr list, must be
+    unusedptrlist = NULL;  
+    struct hashentry *tmp; 
+    for (int jj = 0; jj <  peps.ptSize; jj++) // initialize unused ptr list, must be
     {
         tmp = kmalloc(sizeof(struct hashentry));
         if (!tmp)
         {
             panic("Error during hashpt elements allocation");
         }
-        tmp->next = unusedptrlist;
+        tmp->next = unusedptrlist; 
         unusedptrlist = tmp;
-    }
+    }  // fill all the unused ptr list with size ptSize
 
     pt_active = 1;
 
@@ -154,44 +154,44 @@ int get_hash_func(vaddr_t v, pid_t p)
     return val;
 }
 
-void add_in_hash(vaddr_t vad, pid_t pid, int pos) // NEW
+void add_in_hash(vaddr_t vad, pid_t pid, int pos) // NEW - pos = position of the IPT
 {
     int val = get_hash_func(vad, pid);
     struct hashentry *tmp = unusedptrlist; // take the first from the free
-    unusedptrlist = tmp->next;
-    tmp->next = htable.table[val]; // insert in hashtable
+    unusedptrlist = tmp->next; //remove from head 
+    tmp->next = htable.table[val]; // insert in hashtable 
     htable.table[val] = tmp;       // attach in head here
     tmp->vad = vad;
     tmp->pid = pid; // update values
-    tmp->iptentry = pos;
+    tmp->iptentry = pos; // block inserted in the correct list
 }
 
-int get_index_from_hash(vaddr_t vad, pid_t pid) // NEW
+int get_index_from_hash(vaddr_t vad, pid_t pid) // NEW - returns IPT ptr
 {
     int val = get_hash_func(vad, pid);
-    struct hashentry *tmp = htable.table[val];
-    while (tmp != NULL)
+    struct hashentry *tmp = htable.table[val]; //from the array hashtable, take the correct list
+    while (tmp != NULL)   
     {
-        if (tmp->vad == vad && tmp->pid == pid)
+        if (tmp->vad == vad && tmp->pid == pid) // 
         {
             // peps.pt[val].ctl = REFBITONE(peps.pt[val].ctl); // set RB to 1, that is the second ctl bit
             // peps.pt[val].ctl = TLBBITONE(peps.pt[val].ctl); // set isInTLB to 1, third ctl bit
-            return tmp->iptentry;
+            return tmp->iptentry; // return the correct value
         }
         tmp = tmp->next;
     }
     return -1;
 }
 
-void retrieve_from_hash(vaddr_t vad, pid_t pid) // NEW
-{
-    int val = get_hash_func(vad, pid);
+void retrieve_from_hash(vaddr_t vad, pid_t pid) // NEW  -  insert again in unusedptrlist and REMOVE from hash table
+{       //actually is REMOVE
+    int val = get_hash_func(vad, pid); // 
 
-    struct hashentry *tmp = htable.table[val];
-    struct hashentry *tmpnext;
+    struct hashentry *tmp = htable.table[val];  // 
+    struct hashentry *tmpnext; // 
     if (tmp == NULL) // means that is empty, strange..
     {
-        return;
+        return;  //maybe panic
     }
 
     if (tmp->vad == vad && tmp->pid == pid) // if found in head remove instantly
@@ -212,7 +212,6 @@ void retrieve_from_hash(vaddr_t vad, pid_t pid) // NEW
             unusedptrlist = tmpnext; // update in head list of unused ptrs
             // unusedptrlist->vad=NULL;
             // unusedptrlist->pid=NULL;   maybe not necessary
-
             return;
         }
         tmp = tmpnext; // update
@@ -228,13 +227,13 @@ paddr_t get_page(vaddr_t v)
     int res;
     paddr_t pp;
     lock_acquire(peps.ptlock);
-    res = pt_get_paddr(v, pid);
+    res = pt_get_paddr(v, pid);  //return the correct space
 
     if (res != -1)
     {
 
         pp = (paddr_t)res;
-        add_tlb_reload();
+        add_tlb_reload();  
         lock_release(peps.ptlock);
         return pp;
     }
@@ -270,7 +269,7 @@ int pt_get_paddr(vaddr_t v, pid_t p)
     {
         peps.pt[x].ctl = REFBITONE(peps.pt[x].ctl); // set RB to 1, that is the second ctl bit
         peps.pt[x].ctl = TLBBITONE(peps.pt[x].ctl); // set isInTLB to 1, third ctl bit
-        return x * PAGE_SIZE + peps.firstfreepaddr;
+        return x * PAGE_SIZE + peps.firstfreepaddr;  
     }
     else
     {
@@ -334,11 +333,11 @@ int free_hash(struct hashentry **pe, pid_t pid) // NEW
 
 void free_pages(pid_t p)
 {
-    for (int ii = 0; ii < htable.size; ii++)
+    for (int ii = 0; ii < htable.size; ii++) // for each entry of the array (every entry is a list)
     {
-        while (1)
+        while (1) //
         {
-            int x = free_hash(&htable.table[ii], p);
+            int x = free_hash(&htable.table[ii], p); //
             if (x == -1)
                 break;
         }
@@ -353,6 +352,8 @@ void free_pages(pid_t p)
     }
     // free pages also in swapfile
 }
+
+//FROME ALL OLD
 
 int cabodi(vaddr_t v)
 {
