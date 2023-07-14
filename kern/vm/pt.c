@@ -32,12 +32,13 @@
 int lastIndex = 0; // for FIFO, need to check priorities: Ref. bit and TLB bit
 // for now idea: to get first addr use ram_stealmem or put visible firstaddr
 
-static int nkmalloc=0;
+// static int nkmalloc=0;
 
 void pt_init(void)
 {
     spinlock_acquire(&stealmem_lock);
     int numFrames;
+    nkmalloc=0;
     
     //This numframes will be higher than the actual number of frames available since it doesn't take into account the kmalloc.
     //However this won't cause errors since ptsize will be correctly initialized.
@@ -339,6 +340,8 @@ static int nfork=0;
 
 paddr_t get_contiguous_pages(int npages){
 
+    // kprintf("Process %d performs kmalloc for %d pages\n", curproc->p_pid,npages);
+
     if(npages==1){
         paddr_t pp;
         int pos = findspace(KMALLOC_PAGE,curproc->p_pid); // find a free space
@@ -370,8 +373,7 @@ paddr_t get_contiguous_pages(int npages){
     //spinlock_acquire(&peps.test);
     //lock_acquire(peps.ptlock);
     // P(peps.sem);
-    //kprintf("process %d P in get_contiguous_pages\n", curproc->p_pid);
-    nkmalloc+=npages;
+    // nkmalloc+=npages;
     int i, j, first=-1, valid, prev=0, old_val;
     vaddr_t old_v;
     pid_t old_pid;
@@ -494,14 +496,16 @@ void free_contiguous_pages(vaddr_t addr){
     // spinlock_acquire(&peps.test);
     //lock_acquire(peps.ptlock);
     // P(peps.sem);
-    //kprintf("process %d P in free_contiguous_pages\n", curproc->p_pid);
     
     int i, index, niter;
 
     paddr_t p = KVADDR_TO_PADDR(addr);
+    //p &= PAGE_FRAME;
 
     index = (p-peps.firstfreepaddr)/PAGE_SIZE;
     niter = peps.contiguous[index];
+
+    // kprintf("Process %d performs kfree for %d pages\n", curproc?curproc->p_pid:0,niter);
 
     nkmalloc-=niter;
     KASSERT(niter!=-1);
@@ -616,4 +620,8 @@ void free_forgotten_pages(void){
             peps.contiguous[i]=-1;
         }
     }
+}
+
+void print_nkmalloc(void){
+    kprintf("Final number of kmalloc: %d\n",nkmalloc);
 }

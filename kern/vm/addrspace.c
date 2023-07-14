@@ -305,6 +305,7 @@ vaddr_t alloc_kpages(unsigned npages){
 		p = getppages(npages);
 	}
 	else{
+		nkmalloc+=npages;
 		spinlock_release(&stealmem_lock);
 		p = get_contiguous_pages(npages);
 		spinlock_acquire(&stealmem_lock);

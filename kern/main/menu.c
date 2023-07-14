@@ -144,6 +144,7 @@ common_prog(int nargs, char **args)
 		KASSERT(returnpid==pid);
 
 		//free_forgotten_pages();
+		print_nkmalloc();
 		reorder_swapfile();
 		// vfs_close(v);
 

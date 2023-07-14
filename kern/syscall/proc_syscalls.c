@@ -33,8 +33,8 @@ sys__exit(int status)
   struct proc *p = curproc;
 
   #if OPT_PROJECT
-  remove_process_from_swap(p->p_pid,spl);
   free_pages(p->p_pid);
+  remove_process_from_swap(p->p_pid,spl);
   //struct addrspace *as = proc_getas();
   //vfs_close(as->v);
   #endif

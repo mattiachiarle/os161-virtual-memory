@@ -909,7 +909,7 @@ void end_copy_swap(pid_t newp){
 void reorder_swapfile(void){
     struct swap_cell *tmp=swap->free;
 
-    for(int i=0; i<swap->size && tmp!=NULL; i++){
+    for(int i=0; i<swap->size; i++){
         tmp->offset=i*PAGE_SIZE;
         tmp=tmp->next;
     }

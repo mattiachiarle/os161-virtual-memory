@@ -9,6 +9,7 @@
 #include "spl.h"
 
 int pt_active;
+int nkmalloc;
 
 /*
  * Data structure to handle the page table
@@ -109,5 +110,7 @@ void prepare_copy_pt(pid_t);
 void end_copy_pt(pid_t);
 
 void free_forgotten_pages(void);
+
+void print_nkmalloc(void);
 
 #endif
