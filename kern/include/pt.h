@@ -133,7 +133,7 @@ void free_forgotten_pages(void);
 
 void print_nkmalloc(void);
 
-void retrieve_from_hash(vaddr_t, pid_t);
+void remove_from_hash(vaddr_t, pid_t);
 
 void pt_reset_tlb(void);
 

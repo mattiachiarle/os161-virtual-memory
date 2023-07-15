@@ -79,24 +79,33 @@ void pt_init(void)
     }
 
     peps.firstfreepaddr = ram_stealmem(0);
-    DEBUG(DB_VM,"\nRam size :0x%x, first free address: 0x%x, available memory: 0x%x",mainbus_ramsize(),ram_stealmem(0),mainbus_ramsize()-ram_stealmem(0));
+    // DEBUG(DB_VM,"\n
+    // kprintf("Ram size :0x%x, first free address: 0x%x, available memory: 0x%x",mainbus_ramsize(),ram_stealmem(0),mainbus_ramsize()-ram_stealmem(0));
     // modify in order to take only locatable free space
     peps.ptSize = ((mainbus_ramsize() - ram_stealmem(0)) / PAGE_SIZE) - 1;
-    pt_active=1;
-
     int part = 1.3;     
     htable.size = (int)part * peps.ptSize;  // size of hash table
+    pt_active=1;
+
+    spinlock_release(&stealmem_lock);
     htable.table = kmalloc(sizeof(struct hashentry *) * htable.size); // alloc hash table
+    spinlock_acquire(&stealmem_lock);
     for (int ii = 0; ii < htable.size; ii++) 
     {
         htable.table[ii] = NULL; // no pointers for now inside the array of lists
     }
 
     unusedptrlist = NULL;  
+    // spinlock_init(&peps.test);
+    // peps.sem = sem_create("sem_pt",1);
+
     struct hashentry *tmp; 
-    for (int jj = 0; jj <  peps.ptSize; jj++) // initialize unused ptr list, must be
+    for (int jj = 0; jj <  numFrames; jj++) // initialize unused ptr list, must be
     {
+        spinlock_release(&stealmem_lock);
         tmp = kmalloc(sizeof(struct hashentry));
+        KASSERT((unsigned int)tmp>0x80000000);
+        spinlock_acquire(&stealmem_lock);
         if (!tmp)
         {
             panic("Error during hashpt elements allocation");
@@ -104,8 +113,6 @@ void pt_init(void)
         tmp->next = unusedptrlist; 
         unusedptrlist = tmp;
     }  // fill all the unused ptr list with size ptSize
-    // spinlock_init(&peps.test);
-    // peps.sem = sem_create("sem_pt",1);
 
     spinlock_release(&stealmem_lock);
 }
@@ -152,8 +159,7 @@ int find_victim(vaddr_t vaddr, pid_t pid, int spl)
                 KASSERT(!GETSWAPBIT(peps.pt[i].ctl));
                 KASSERT(peps.pt[i].page!=KMALLOC_PAGE);
                 // KASSERT(GETVALBIT(peps.pt[i].ctl));
-                retrieve_from_hash(peps.pt[i].page, peps.pt[i].pid);
-                add_in_hash(vaddr, pid, i);
+                remove_from_hash(peps.pt[i].page, peps.pt[i].pid);
                 old_pid=peps.pt[i].pid;
                 peps.pt[i].pid=pid;
                 old_validity=GETVALBIT(peps.pt[i].ctl);
@@ -164,6 +170,7 @@ int find_victim(vaddr_t vaddr, pid_t pid, int spl)
                 if(old_validity){
                     store_swap(old_v,old_pid,i * PAGE_SIZE + peps.firstfreepaddr);
                 } 
+                add_in_hash(vaddr, pid, i);
                 lastIndex = (i + 1) % peps.ptSize;// new ptr for FIFO
                 return i; // return paddr of that frame
             }
@@ -200,11 +207,16 @@ int get_hash_func(vaddr_t v, pid_t p)
     val = val % htable.size;
     return val;
 }
-
+static int add=0;
 void add_in_hash(vaddr_t vad, pid_t pid, int pos) // NEW - pos = position of the IPT
 {
+    KASSERT(vad!=0);
+    KASSERT(pid!=0);
+    add++;
+    // kprintf("Adding in hash 0x%x for process %d, pos %d\n",vad,pid,pos);
     int val = get_hash_func(vad, pid);
     struct hashentry *tmp = unusedptrlist; // take the first from the free
+    KASSERT(tmp!=NULL);
     unusedptrlist = tmp->next; //remove from head 
     tmp->next = htable.table[val]; // insert in hashtable 
     htable.table[val] = tmp;       // attach in head here
@@ -217,6 +229,10 @@ int get_index_from_hash(vaddr_t vad, pid_t pid) // NEW - returns IPT ptr
 {
     int val = get_hash_func(vad, pid);
     struct hashentry *tmp = htable.table[val]; //from the array hashtable, take the correct list
+    #if OPT_DEBUG
+    if(tmp!=NULL)
+        kprintf("Value of tmp: 0x%x, pid=%d\n",tmp->vad,tmp->pid);
+    #endif
     while (tmp != NULL)   
     {
         if (tmp->vad == vad && tmp->pid == pid) // 
@@ -229,20 +245,24 @@ int get_index_from_hash(vaddr_t vad, pid_t pid) // NEW - returns IPT ptr
     }
     return -1;
 }
-
-void retrieve_from_hash(vaddr_t vad, pid_t pid) // NEW  -  insert again in unusedptrlist and REMOVE from hash table
-{       //actually is REMOVE
+static int rem=0;
+void remove_from_hash(vaddr_t vad, pid_t pid) // NEW  -  insert again in unusedptrlist and REMOVE from hash table
+{       
+    rem++;
     int val = get_hash_func(vad, pid); // 
+    // kprintf("Removing from hash 0x%x for process %d, pos %d\n",vad,pid,val);
 
     struct hashentry *tmp = htable.table[val];  // 
-    struct hashentry *tmpnext; // 
+    struct hashentry *prev=NULL; // 
     if (tmp == NULL) // means that is empty, strange..
     {
-        return;  //maybe panic
+        panic("Error during remove from hash");
     }
 
     if (tmp->vad == vad && tmp->pid == pid) // if found in head remove instantly
     {
+        tmp->vad=0;
+        tmp->pid=0;
         htable.table[val] = tmp->next; /// take second in list
         tmp->next = unusedptrlist;
         unusedptrlist = tmp;
@@ -251,17 +271,19 @@ void retrieve_from_hash(vaddr_t vad, pid_t pid) // NEW  -  insert again in unuse
 
     while (tmp != NULL) // start pointing first element
     {
-        tmpnext = tmp->next;
-        if (tmpnext->vad == vad && tmpnext->pid == pid) // if found
+        if (tmp->vad == vad && tmp->pid == pid) // if found
         {
-            tmp->next = tmpnext->next; // remove from the list
-            tmpnext->next = unusedptrlist;
-            unusedptrlist = tmpnext; // update in head list of unused ptrs
+            tmp->vad=0;
+            tmp->pid=0;
+            prev->next = tmp->next; // remove from the list
+            tmp->next = unusedptrlist;
+            unusedptrlist = tmp; // update in head list of unused ptrs
             // unusedptrlist->vad=NULL;
             // unusedptrlist->pid=NULL;   maybe not necessary
             return;
         }
-        tmp = tmpnext; // update
+        prev = tmp; // update
+        tmp = tmp->next;
     }
 
     panic("nothing to remove found!!");
@@ -317,7 +339,7 @@ paddr_t get_page(vaddr_t v, int spl)
 
 int pt_get_paddr(vaddr_t v, pid_t p, int spl)
 {
-    int validity, stopped;
+    int stopped;
 
     stopped=1;
 
@@ -343,51 +365,51 @@ int pt_get_paddr(vaddr_t v, pid_t p, int spl)
 
     }
 
-    return -1; // not found in PT
+    return -1; // not a significant return value, used just to avoid errors while compiling.
 }
 
-int free_hash(struct hashentry **pe, pid_t pid) // NEW
-{
+// int free_hash(struct hashentry **pe, pid_t pid) // NEW
+// {
 
-    struct hashentry *tmp = *pe;
-    struct hashentry *tmpnext;
-    if (tmp == NULL) // means that is empty
-    {
-        return -1;
-    }
-    if (tmp->pid == pid) // if found in head remove instantly
-    {
-        *pe = tmp->next; /// take second in list
-        tmp->next = unusedptrlist;
-        unusedptrlist = tmp;
-        return 1;
-    }
-    while (tmp != NULL) // start pointing first element
-    {
-        tmpnext = tmp->next;
-        if (tmpnext->pid == pid) // if found
-        {
-            tmp->next = tmpnext->next; // remove from the list
-            tmpnext->next = unusedptrlist;
-            unusedptrlist = tmpnext; // update in head list of unused ptrs
-            return 1;
-        }
-        tmp = tmpnext; // update
-    }
-    return -1;
-}
+//     struct hashentry *tmp = *pe;
+//     struct hashentry *tmpnext;
+//     if (tmp == NULL) // means that is empty
+//     {
+//         return -1;
+//     }
+//     if (tmp->pid == pid) // if found in head remove instantly
+//     {
+//         *pe = tmp->next; /// take second in list
+//         tmp->next = unusedptrlist;
+//         unusedptrlist = tmp;
+//         return 1;
+//     }
+//     while (tmp != NULL) // start pointing first element
+//     {
+//         tmpnext = tmp->next;
+//         if (tmpnext->pid == pid) // if found
+//         {
+//             tmp->next = tmpnext->next; // remove from the list
+//             tmpnext->next = unusedptrlist;
+//             unusedptrlist = tmpnext; // update in head list of unused ptrs
+//             return 1;
+//         }
+//         tmp = tmpnext; // update
+//     }
+//     return -1;
+// }
 
 void free_pages(pid_t p)
 {
-    for (int ii = 0; ii < htable.size; ii++) // for each entry of the array (every entry is a list)
-    {
-        while (1) //
-        {
-            int x = free_hash(&htable.table[ii], p); //
-            if (x == -1)
-                break;
-        }
-    }
+    // for (int ii = 0; ii < htable.size; ii++) // for each entry of the array (every entry is a list)
+    // {
+    //     while (1) //
+    //     {
+    //         int x = free_hash(&htable.table[ii], p); //
+    //         if (x == -1)
+    //             break;
+    //     }
+    // }
 
     for (int i = 0; i < peps.ptSize; i++)
     {
@@ -396,11 +418,30 @@ void free_pages(pid_t p)
             KASSERT(peps.pt[i].page!=KMALLOC_PAGE);
             KASSERT(!GETSWAPBIT(peps.pt[i].ctl));
             KASSERT(!GETIOBIT(peps.pt[i].ctl));
+            remove_from_hash(peps.pt[i].page, peps.pt[i].pid);
             peps.pt[i].ctl = 0;
             peps.pt[i].page = 0;
             peps.pt[i].pid = 0;
         }
     }
+
+    // kprintf("We have %d add and %d remove\n",add,rem);
+
+    // struct hashentry *tmp;
+
+    // for(int i=0;i < htable.size; i++){
+    //     tmp=htable.table[i];
+    //     while(tmp!=NULL){
+    //         if(htable.table[i]->vad!=KMALLOC_PAGE){
+    //             kprintf("Error with a frame in the hash table: index %d, vaddr %d, pid %d\n",i,htable.table[i]->vad,htable.table[i]->pid);
+    //         }
+    //         // KASSERT(htable.table[i]->vad==KMALLOC_PAGE);
+    //         else{
+    //             KASSERT(htable.table[i]==NULL);
+    //         }
+    //         tmp=tmp->next;
+    //     }
+    // }
 
 }
 
@@ -457,34 +498,35 @@ paddr_t get_contiguous_pages(int npages, int spl){
 
     DEBUG(DB_VM,"Process %d performs kmalloc for %d pages\n", curproc->p_pid,npages);
 
-    if(npages==1){
-        paddr_t pp;
-        int pos = findspace(KMALLOC_PAGE,curproc->p_pid); // find a free space
-        if (pos == -1)
-        {
-            pos = find_victim(KMALLOC_PAGE, curproc->p_pid, spl);
-            peps.pt[pos].ctl = IOBITZERO(peps.pt[pos].ctl);
-            lock_acquire(peps.pt[pos].entry_lock);
-            cv_broadcast(peps.pt[pos].entry_cv,peps.pt[pos].entry_lock);
-            lock_release(peps.pt[pos].entry_lock);
-            lock_acquire(peps.pt_lock);
-            cv_broadcast(peps.pt_cv,peps.pt_lock);
-            lock_release(peps.pt_lock);
-            KASSERT(pos<peps.ptSize);
-            pp = peps.firstfreepaddr + pos*PAGE_SIZE;
-        }
-        else{
-            KASSERT(pos<peps.ptSize);
-            pp = peps.firstfreepaddr + pos*PAGE_SIZE;
-            peps.pt[pos].ctl = VALBITONE(peps.pt[pos].ctl);
-            peps.pt[pos].page = KMALLOC_PAGE;
-            peps.pt[pos].pid = curproc->p_pid;
-        }
+    // if(npages==1){
+    //     paddr_t pp;
+    //     int pos = findspace(KMALLOC_PAGE,curproc->p_pid); // find a free space
+    //     if (pos == -1)
+    //     {
+    //         pos = find_victim(KMALLOC_PAGE, curproc->p_pid, spl);
+    //         peps.pt[pos].ctl = IOBITZERO(peps.pt[pos].ctl);
+    //         lock_acquire(peps.pt[pos].entry_lock);
+    //         cv_broadcast(peps.pt[pos].entry_cv,peps.pt[pos].entry_lock);
+    //         lock_release(peps.pt[pos].entry_lock);
+    //         lock_acquire(peps.pt_lock);
+    //         cv_broadcast(peps.pt_cv,peps.pt_lock);
+    //         lock_release(peps.pt_lock);
+    //         KASSERT(pos<peps.ptSize);
+    //         pp = peps.firstfreepaddr + pos*PAGE_SIZE;
+    //     }
+    //     else{
+    //         KASSERT(pos<peps.ptSize);
+    //         add_in_hash(KMALLOC_PAGE, curproc->p_pid, pos);
+    //         pp = peps.firstfreepaddr + pos*PAGE_SIZE;
+    //         peps.pt[pos].ctl = VALBITONE(peps.pt[pos].ctl);
+    //         peps.pt[pos].page = KMALLOC_PAGE;
+    //         peps.pt[pos].pid = curproc->p_pid;
+    //     }
 
-        peps.contiguous[pos]=1;
+    //     peps.contiguous[pos]=1;
 
-        return pp;
-    }
+    //     return pp;
+    // }
 
     int i, j, first=-1, valid, prev=0, old_val, first_iteration=0;
     vaddr_t old_v;
@@ -516,6 +558,7 @@ paddr_t get_contiguous_pages(int npages, int spl){
                 peps.pt[j].ctl = VALBITONE(peps.pt[j].ctl); //Set pages as valid
                 peps.pt[j].page = KMALLOC_PAGE;
                 peps.pt[j].pid = curproc->p_pid;
+                // add_in_hash(KMALLOC_PAGE, curproc->p_pid, j);
                 //vaddr and pid are useless here since kernel uses a different address translation
             }
             peps.contiguous[first] = npages;
@@ -554,14 +597,20 @@ paddr_t get_contiguous_pages(int npages, int spl){
                         KASSERT(!GETREFBIT(peps.pt[j].ctl) || !GETVALBIT(peps.pt[j].ctl));
                         KASSERT(!GETIOBIT(peps.pt[j].ctl));
                         KASSERT(!GETSWAPBIT(peps.pt[j].ctl));
+                        // add_in_hash(KMALLOC_PAGE,curproc->p_pid,j);
                         old_pid = peps.pt[j].pid;
                         old_v = peps.pt[j].page;
                         peps.pt[j].pid = curproc->p_pid;
                         peps.pt[j].page = KMALLOC_PAGE;
                         old_val=GETVALBIT(peps.pt[j].ctl);
                         peps.pt[j].ctl = VALBITONE(peps.pt[j].ctl); //Set pages as valid
+                        // if(old_val){
+                        //     remove_from_hash(old_v, old_pid);
+                        // }
+                        // add_in_hash(KMALLOC_PAGE, curproc->p_pid, j);
                         if(old_val){
                             peps.pt[j].ctl = IOBITONE(peps.pt[j].ctl);
+                            remove_from_hash(old_v,old_pid);//ACTUALLY WE SHOULD FIRSTLY REMOVE FROM HASH, STORE AND LASTLY UPDATE FREELIST
                             store_swap(old_v,old_pid,j * PAGE_SIZE + peps.firstfreepaddr);
                             peps.pt[j].ctl = IOBITZERO(peps.pt[j].ctl);
                             lock_acquire(peps.pt[j].entry_lock);
@@ -615,6 +664,8 @@ void free_contiguous_pages(vaddr_t addr){
         KASSERT(peps.pt[i].page==KMALLOC_PAGE);
         peps.pt[i].ctl = VALBITZERO(peps.pt[i].ctl);
         peps.pt[i].page=0;
+        // remove_from_hash(peps.pt[i].page, peps.pt[i].pid); //It is true that we'll remove from the hash one random page among all the pages allocated with kmalloc by a certain process.
+                                                             //However, it's not an issue since the pages allocated with kmalloc are handles by the kernel, that doesn't access the page table.
     }
 
     peps.contiguous[index]=-1;
