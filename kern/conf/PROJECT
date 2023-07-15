@@ -38,3 +38,4 @@ options project
 options sw_list
 #options debug
 options fork
+options alloc_ht

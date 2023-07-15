@@ -31,6 +31,7 @@ struct swapfile{
     struct swap_cell **start_text;
     struct swap_cell **start_data;
     struct swap_cell **start_stack;
+    void *kbuf;
     #else
     struct swap_cell *elements;//Array of lists in the swapfile (one for each pid)
     #endif
@@ -65,7 +66,7 @@ struct swap_cell{
  * 
  * @return 1 if the page was found in the swapfile, 0 otherwise
 */
-int load_swap(vaddr_t, pid_t, paddr_t, int);
+int load_swap(vaddr_t, pid_t, paddr_t);
 
 /**
  * This function saves a frame into the swapfile.
@@ -89,7 +90,7 @@ int swap_init(void);
  * 
  * @param pid_t: pid of the ended process.
 */
-void remove_process_from_swap(pid_t, int);
+void remove_process_from_swap(pid_t);
 
 /**
  * When a fork is executed, we copy all the pages of the old process for the new process too.
@@ -97,7 +98,7 @@ void remove_process_from_swap(pid_t, int);
  * @param pid_t: pid of the old process.
  * @param pid_t: pid of the new process.
 */
-void copy_swap_pages(pid_t, pid_t, int);
+void copy_swap_pages(pid_t, pid_t);
 
 void prepare_copy_swap(pid_t, pid_t);
 

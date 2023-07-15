@@ -21,6 +21,7 @@
 #include "swapfile.h"
 #include "pt.h"
 #include "opt-project.h"
+#include "addrspace.h"
 
 /*
  * system calls for process management
@@ -34,7 +35,7 @@ sys__exit(int status)
 
   #if OPT_PROJECT
   free_pages(p->p_pid);
-  remove_process_from_swap(p->p_pid,spl);
+  remove_process_from_swap(p->p_pid);
   //struct addrspace *as = proc_getas();
   //vfs_close(as->v);
   #endif
@@ -96,6 +97,11 @@ call_enter_forked_process(void *tfv, unsigned long dummy) {
 
 int sys_fork(struct trapframe *ctf, pid_t *retval) {
 
+  int waited=0;
+  if(sem_fork){
+    waited=1;
+    P(sem_fork);
+  }
   int spl = splhigh(); // so that the control does nit pass to another waiting process.
   // n++;
   // KASSERT(n==1);
@@ -122,7 +128,7 @@ int sys_fork(struct trapframe *ctf, pid_t *retval) {
      of the current process */
   #if OPT_PROJECT
   newp->ended=0;
-  as_copy(curproc->p_addrspace, &(newp->p_addrspace), old, new, spl);
+  as_copy(curproc->p_addrspace, &(newp->p_addrspace), old, new);
   if(newp->p_addrspace == NULL){
     proc_destroy(newp); 
     return ENOMEM; 
@@ -161,6 +167,9 @@ int sys_fork(struct trapframe *ctf, pid_t *retval) {
   *retval = newp->p_pid;
   // n--;
   splx(spl);
+  if(waited){
+    V(sem_fork);
+  }
 
   return 0;
 }

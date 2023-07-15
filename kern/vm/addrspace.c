@@ -65,7 +65,7 @@ as_create(void)
 }
 
 int
-as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp, int spl)
+as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp)
 {
 	struct addrspace *newas;
 
@@ -96,7 +96,7 @@ as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp, i
 
 	prepare_copy_pt(oldp);
 	prepare_copy_swap(oldp,newp);
-	copy_swap_pages(newp, oldp, spl);
+	copy_swap_pages(newp, oldp);
 	copy_pt_entries(oldp, newp);
 	end_copy_pt(oldp);
 	end_copy_swap(newp);
@@ -307,7 +307,7 @@ vaddr_t alloc_kpages(unsigned npages){
 	else{
 		nkmalloc+=npages;
 		spinlock_release(&stealmem_lock);
-		p = get_contiguous_pages(npages, spl);
+		p = get_contiguous_pages(npages);
 		spinlock_acquire(&stealmem_lock);
 	}
 
@@ -342,4 +342,8 @@ void free_kpages(vaddr_t addr){
 void addrspace_init(void){
 	spinlock_init(&stealmem_lock);
 	pt_active=0;
+}
+
+void create_sem_fork(void){
+	sem_fork = sem_create("sem_fork",1);
 }

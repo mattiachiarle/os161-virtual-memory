@@ -7,6 +7,7 @@
 #include "synch.h"
 #include "spl.h"
 #include "opt-debug.h"
+#include "opt-alloc_ht.h"
 
 int pt_active;
 int nkmalloc;
@@ -51,7 +52,9 @@ struct hashT   // struct
     int size; // 1.3 times the IPT
 } htable;
 
+#if !OPT_ALLOC_HT
 struct hashentry *unusedptrlist;  // list where all unused blocks are stored
+#endif
 
 /*
  * PT INIT
@@ -68,7 +71,7 @@ void pt_init(void);
  * physical address otherwise
  */
 
-int pt_get_paddr(vaddr_t, pid_t, int);
+int pt_get_paddr(vaddr_t, pid_t);
 
 /*  THIS IS THE BIG WRAPPER OF ALL OTHER FUNCS
  * find the cur PID and calls getpaddr that returns something.
@@ -77,7 +80,7 @@ int pt_get_paddr(vaddr_t, pid_t, int);
  *      IF found calls LOAD_PAGE Mattia's function
  *      ELSE calls find_victim that remove an entry and then LOAD_PAGE Mattia's function
  */
-paddr_t get_page(vaddr_t, int);
+paddr_t get_page(vaddr_t);
 
 /*
         wrapper for getpaddr
@@ -98,7 +101,7 @@ paddr_t get_page(vaddr_t, int);
  */
 // paddr_t load_page(vaddr_t, pid_t);
 
-int find_victim(vaddr_t, pid_t, int);
+int find_victim(vaddr_t, pid_t);
 
 /*
  * This function frees all the pages of a process after its termination.
@@ -113,7 +116,7 @@ void add_in_hash(vaddr_t, pid_t, int);
 
 int cabodi(vaddr_t, pid_t);
 
-paddr_t get_contiguous_pages(int, int);
+paddr_t get_contiguous_pages(int);
 
 int free_hash(struct hashentry **, pid_t);
 

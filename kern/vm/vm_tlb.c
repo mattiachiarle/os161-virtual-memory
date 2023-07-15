@@ -58,7 +58,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress){
     /*did mattia set up the as correctly?*/
     KASSERT(as_is_ok() == 1);
 
-    paddr = get_page(faultaddress,spl);
+    paddr = get_page(faultaddress);
     
     tlb_insert(faultaddress, paddr);
     splx(spl);

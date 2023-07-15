@@ -53,7 +53,7 @@ load_elf_page(struct vnode *v,
 	return result;
 }
 
-int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr, int spl){
+int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr){
 
     int swap_found, result;
     struct addrspace *as;
@@ -62,7 +62,7 @@ int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr, int spl){
 
 	as = proc_getas();
 
-    swap_found = load_swap(vaddr, pid, paddr, spl); //we check if the page was already read from the elf, i.e. it currently is stored in the swapfile.
+    swap_found = load_swap(vaddr, pid, paddr); //we check if the page was already read from the elf, i.e. it currently is stored in the swapfile.
 
     if(swap_found){
         return 0; //load_swap takes care of loading too, so we just return.

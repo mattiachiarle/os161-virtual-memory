@@ -28,6 +28,6 @@
  * 
  * @return 0 if everything goes fine, otherwise the error code returned from VOP_READ
  */
-int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr, int spl);
+int load_page(vaddr_t vaddr, pid_t pid, paddr_t paddr);
 
 #endif

@@ -94,11 +94,11 @@ void pt_init(void)
     {
         htable.table[ii] = NULL; // no pointers for now inside the array of lists
     }
-
-    unusedptrlist = NULL;  
     // spinlock_init(&peps.test);
     // peps.sem = sem_create("sem_pt",1);
 
+    #if !OPT_ALLOC_HT
+    unusedptrlist = NULL;  
     struct hashentry *tmp; 
     for (int jj = 0; jj <  numFrames; jj++) // initialize unused ptr list, must be
     {
@@ -113,6 +113,7 @@ void pt_init(void)
         tmp->next = unusedptrlist; 
         unusedptrlist = tmp;
     }  // fill all the unused ptr list with size ptSize
+    #endif
 
     spinlock_release(&stealmem_lock);
 }
@@ -135,7 +136,7 @@ static int findspace()
 static int n=0;
 #endif
 
-int find_victim(vaddr_t vaddr, pid_t pid, int spl)
+int find_victim(vaddr_t vaddr, pid_t pid)
 {
     int i, start_i=lastIndex, first=0, old_validity=0;
     pid_t old_pid;
@@ -158,8 +159,6 @@ int find_victim(vaddr_t vaddr, pid_t pid, int spl)
                 KASSERT(!GETIOBIT(peps.pt[i].ctl));
                 KASSERT(!GETSWAPBIT(peps.pt[i].ctl));
                 KASSERT(peps.pt[i].page!=KMALLOC_PAGE);
-                // KASSERT(GETVALBIT(peps.pt[i].ctl));
-                remove_from_hash(peps.pt[i].page, peps.pt[i].pid);
                 old_pid=peps.pt[i].pid;
                 peps.pt[i].pid=pid;
                 old_validity=GETVALBIT(peps.pt[i].ctl);
@@ -168,6 +167,7 @@ int find_victim(vaddr_t vaddr, pid_t pid, int spl)
                 old_v = peps.pt[i].page;
                 peps.pt[i].page = vaddr;
                 if(old_validity){
+                    remove_from_hash(old_v, old_pid);
                     store_swap(old_v,old_pid,i * PAGE_SIZE + peps.firstfreepaddr);
                 } 
                 add_in_hash(vaddr, pid, i);
@@ -186,9 +186,7 @@ int find_victim(vaddr_t vaddr, pid_t pid, int spl)
             }
             else{
                 lock_acquire(peps.pt_lock);
-                splx(spl);
                 cv_wait(peps.pt_cv,peps.pt_lock);
-                spl=splhigh();
                 lock_release(peps.pt_lock);
             }
         }
@@ -215,9 +213,13 @@ void add_in_hash(vaddr_t vad, pid_t pid, int pos) // NEW - pos = position of the
     add++;
     // kprintf("Adding in hash 0x%x for process %d, pos %d\n",vad,pid,pos);
     int val = get_hash_func(vad, pid);
+    #if OPT_ALLOC_HT
+    struct hashentry *tmp = kmalloc(sizeof(struct hashentry));
+    #else
     struct hashentry *tmp = unusedptrlist; // take the first from the free
     KASSERT(tmp!=NULL);
     unusedptrlist = tmp->next; //remove from head 
+    #endif
     tmp->next = htable.table[val]; // insert in hashtable 
     htable.table[val] = tmp;       // attach in head here
     tmp->vad = vad;
@@ -261,11 +263,16 @@ void remove_from_hash(vaddr_t vad, pid_t pid) // NEW  -  insert again in unusedp
 
     if (tmp->vad == vad && tmp->pid == pid) // if found in head remove instantly
     {
+        #if OPT_ALLOC_HT
+        htable.table[val] = tmp->next;
+        kfree(tmp);
+        #else
         tmp->vad=0;
         tmp->pid=0;
         htable.table[val] = tmp->next; /// take second in list
         tmp->next = unusedptrlist;
         unusedptrlist = tmp;
+        #endif
         return;
     }
 
@@ -273,11 +280,16 @@ void remove_from_hash(vaddr_t vad, pid_t pid) // NEW  -  insert again in unusedp
     {
         if (tmp->vad == vad && tmp->pid == pid) // if found
         {
+            #if OPT_ALLOC_HT
+            prev->next = tmp->next; // remove from the list
+            kfree(tmp);
+            #else
             tmp->vad=0;
             tmp->pid=0;
             prev->next = tmp->next; // remove from the list
             tmp->next = unusedptrlist;
             unusedptrlist = tmp; // update in head list of unused ptrs
+            #endif
             // unusedptrlist->vad=NULL;
             // unusedptrlist->pid=NULL;   maybe not necessary
             return;
@@ -289,13 +301,13 @@ void remove_from_hash(vaddr_t vad, pid_t pid) // NEW  -  insert again in unusedp
     panic("nothing to remove found!!");
 }
 
-paddr_t get_page(vaddr_t v, int spl)
+paddr_t get_page(vaddr_t v)
 {
 
     pid_t pid = proc_getpid(curproc); // get curpid here
     int res;
     paddr_t pp;
-    res = pt_get_paddr(v, pid, spl);
+    res = pt_get_paddr(v, pid);
 
     if (res != -1)
     {
@@ -309,7 +321,7 @@ paddr_t get_page(vaddr_t v, int spl)
     int pos = findspace(v,pid); // find a free space
     if (pos == -1)
     {
-        pos = find_victim(v, pid, spl);
+        pos = find_victim(v, pid);
         KASSERT(pos<peps.ptSize);
         pp = peps.firstfreepaddr + pos*PAGE_SIZE;
     }
@@ -324,7 +336,7 @@ paddr_t get_page(vaddr_t v, int spl)
     }
 
     KASSERT(peps.pt[pos].page!=KMALLOC_PAGE);
-    load_page(v, pid, pp, spl);
+    load_page(v, pid, pp);
     peps.pt[pos].ctl = IOBITZERO(peps.pt[pos].ctl);
     lock_acquire(peps.pt[pos].entry_lock);
     cv_broadcast(peps.pt[pos].entry_cv,peps.pt[pos].entry_lock);
@@ -337,10 +349,9 @@ paddr_t get_page(vaddr_t v, int spl)
     return pp;
 }
 
-int pt_get_paddr(vaddr_t v, pid_t p, int spl)
+int pt_get_paddr(vaddr_t v, pid_t p)
 {
     int stopped;
-
     stopped=1;
 
     while(stopped){
@@ -352,9 +363,7 @@ int pt_get_paddr(vaddr_t v, pid_t p, int spl)
         lock_acquire(peps.pt[i].entry_lock);
         while(GETIOBIT(peps.pt[i].ctl)){
             stopped=1;
-            splx(spl);
             cv_wait(peps.pt[i].entry_cv,peps.pt[i].entry_lock);
-            spl = splhigh();
         }
         lock_release(peps.pt[i].entry_lock);
         KASSERT(!GETIOBIT(peps.pt[i].ctl));
@@ -494,39 +503,9 @@ static int valid_entry(uint8_t ctl, vaddr_t v){
 static int nfork=0;
 #endif
 
-paddr_t get_contiguous_pages(int npages, int spl){
-
+paddr_t get_contiguous_pages(int npages){
+    
     DEBUG(DB_VM,"Process %d performs kmalloc for %d pages\n", curproc->p_pid,npages);
-
-    // if(npages==1){
-    //     paddr_t pp;
-    //     int pos = findspace(KMALLOC_PAGE,curproc->p_pid); // find a free space
-    //     if (pos == -1)
-    //     {
-    //         pos = find_victim(KMALLOC_PAGE, curproc->p_pid, spl);
-    //         peps.pt[pos].ctl = IOBITZERO(peps.pt[pos].ctl);
-    //         lock_acquire(peps.pt[pos].entry_lock);
-    //         cv_broadcast(peps.pt[pos].entry_cv,peps.pt[pos].entry_lock);
-    //         lock_release(peps.pt[pos].entry_lock);
-    //         lock_acquire(peps.pt_lock);
-    //         cv_broadcast(peps.pt_cv,peps.pt_lock);
-    //         lock_release(peps.pt_lock);
-    //         KASSERT(pos<peps.ptSize);
-    //         pp = peps.firstfreepaddr + pos*PAGE_SIZE;
-    //     }
-    //     else{
-    //         KASSERT(pos<peps.ptSize);
-    //         add_in_hash(KMALLOC_PAGE, curproc->p_pid, pos);
-    //         pp = peps.firstfreepaddr + pos*PAGE_SIZE;
-    //         peps.pt[pos].ctl = VALBITONE(peps.pt[pos].ctl);
-    //         peps.pt[pos].page = KMALLOC_PAGE;
-    //         peps.pt[pos].pid = curproc->p_pid;
-    //     }
-
-    //     peps.contiguous[pos]=1;
-
-    //     return pp;
-    // }
 
     int i, j, first=-1, valid, prev=0, old_val, first_iteration=0;
     vaddr_t old_v;
@@ -634,9 +613,7 @@ paddr_t get_contiguous_pages(int npages, int spl){
         }
         else{
             lock_acquire(peps.pt_lock);
-            splx(spl);
             cv_wait(peps.pt_cv,peps.pt_lock);
-            spl=splhigh();
             lock_release(peps.pt_lock);
         }
 

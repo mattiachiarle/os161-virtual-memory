@@ -42,10 +42,12 @@
 #include "vm_tlb.h"
 #include "swapfile.h"
 #include "current.h"
+#include "opt-project.h"
 
 struct vnode;
-#if !OPT_DUMBVM
+#if OPT_PROJECT
 struct spinlock stealmem_lock;
+struct semaphore *sem_fork;
 #endif
 
 #define DUMBVM_STACKPAGES    18
@@ -127,7 +129,7 @@ struct addrspace *as_create(void);
 #if OPT_DUMBVM
 int               as_copy(struct addrspace *src, struct addrspace **ret);
 #else
-int               as_copy(struct addrspace *src, struct addrspace **ret, pid_t oldp, pid_t newp, int spl);
+int               as_copy(struct addrspace *src, struct addrspace **ret, pid_t oldp, pid_t newp);
 #endif
 void              as_activate(void);
 void              as_deactivate(void);
@@ -165,5 +167,6 @@ void vm_tlbshootdown(const struct tlbshootdown *ts);
 vaddr_t alloc_kpages(unsigned npages);
 void free_kpages(vaddr_t addr);
 void addrspace_init(void);
+void create_sem_fork(void);
 
 #endif /* _ADDRSPACE_H_ */
