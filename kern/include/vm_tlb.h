@@ -4,6 +4,7 @@
 #include "types.h"
 #include "syscall.h"
 #include "proc.h"
+#include "opt-debug.h"
 
 pid_t previous_pid;
 

@@ -494,7 +494,6 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid){
     struct swap_cell *ptr, *free;
     
     if(swap->start_text[new_pid]!=NULL){
-        // void *kbuf = kmalloc(PAGE_SIZE);
         #if OPT_DEBUG
         if(n==0){
             DEBUG(DB_VM,"FIRST SWAP COPY FOR FORK\n");
@@ -539,7 +538,6 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid){
             KASSERT(free->vaddr!=1);
         }
         KASSERT(free==NULL);
-        // kfree(kbuf);
     }
     if(swap->start_data[new_pid]!=NULL){
         #if OPT_DEBUG
@@ -548,7 +546,6 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid){
             n++;
         }
         #endif
-        // void *kbuf = kmalloc(PAGE_SIZE);
         for(ptr = swap->start_data[new_pid], free = swap->data[new_pid]; ptr!=NULL; ptr=ptr->next, free=free->next){
             KASSERT(ptr->swap==1);
 
@@ -587,7 +584,6 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid){
             KASSERT(free->vaddr!=1);
         }
         KASSERT(free==NULL);
-        // kfree(kbuf);
     }
 
     if(swap->start_stack[new_pid]!=NULL){
@@ -597,7 +593,6 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid){
             n++;
         }
         #endif
-        // void *kbuf = kmalloc(PAGE_SIZE);
         for(ptr = swap->start_stack[new_pid], free = swap->stack[new_pid]; ptr!=NULL; ptr=ptr->next, free=free->next){
             KASSERT(ptr->swap==1);
 
@@ -636,7 +631,6 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid){
             KASSERT(free->vaddr!=1);
         }
         KASSERT(free==NULL);
-        // kfree(kbuf);
     }
 
     #else
@@ -650,13 +644,13 @@ void copy_swap_pages(pid_t new_pid, pid_t old_pid){
                     swap->elements[j].pid=new_pid;
                     swap->elements[j].vaddr=swap->elements[i].vaddr;//We assign the empty entry found to the page that must be stored
                     
-                    uio_kinit(&iov,&u,(void* )kbuf,PAGE_SIZE,i*PAGE_SIZE,UIO_READ);
+                    uio_kinit(&iov,&u,swap->kbuf,PAGE_SIZE,i*PAGE_SIZE,UIO_READ);
                     result = VOP_READ(swap->v,&u);//We perform the read
                     if(result){
                         panic("VOP_READ in swapfile failed, with result=%d",result);
                     }
 
-                    uio_kinit(&iov,&u,(void* )kbuf,PAGE_SIZE,j*PAGE_SIZE,UIO_WRITE);
+                    uio_kinit(&iov,&u,swap->kbuf,PAGE_SIZE,j*PAGE_SIZE,UIO_WRITE);
                     result = VOP_WRITE(swap->v,&u);//We perform the read
                     if(result){
                         panic("VOP_READ in swapfile failed, with result=%d",result);

@@ -262,6 +262,7 @@ int as_is_ok(){
 void vm_bootstrap(void){
 	swap_init();
 	pt_init();
+	htable_init();
 }
 
 void vm_tlbshootdown(const struct tlbshootdown *ts){
@@ -270,6 +271,8 @@ void vm_tlbshootdown(const struct tlbshootdown *ts){
 }
 
 void vm_shutdown(void){
+	
+	#if OPT_DEBUG
 	for(int i=0;i<peps.ptSize;i++){
 		if(peps.pt[i].ctl!=0){
 			kprintf("Entry%d has not been freed! ctl=%d, pid=%d\n",i,peps.pt[i].ctl,peps.pt[i].pid);
@@ -278,6 +281,7 @@ void vm_shutdown(void){
 			kprintf("It looks like some errors with free occurred: entry%d, process %d\n",i,peps.pt[i].pid);
 		}
 	}
+	#endif
 
 	print_stats();
 }
@@ -305,7 +309,9 @@ vaddr_t alloc_kpages(unsigned npages){
 		p = getppages(npages);
 	}
 	else{
+		#if OPT_DEBUG
 		nkmalloc+=npages;
+		#endif
 		spinlock_release(&stealmem_lock);
 		p = get_contiguous_pages(npages);
 		spinlock_acquire(&stealmem_lock);
@@ -314,6 +320,8 @@ vaddr_t alloc_kpages(unsigned npages){
 	spinlock_release(&stealmem_lock);
 
 	splx(spl);
+
+	KASSERT(PADDR_TO_KVADDR(p)>0x80000000 && PADDR_TO_KVADDR(p)<=0x90000000);
 
 	return PADDR_TO_KVADDR(p);
 }

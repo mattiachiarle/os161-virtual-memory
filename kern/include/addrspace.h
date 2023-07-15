@@ -43,6 +43,7 @@
 #include "swapfile.h"
 #include "current.h"
 #include "opt-project.h"
+#include "opt-debug.h"
 
 struct vnode;
 #if OPT_PROJECT

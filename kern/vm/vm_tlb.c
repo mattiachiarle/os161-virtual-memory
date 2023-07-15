@@ -21,16 +21,15 @@ int tlb_remove(void){
 }
 
 
-#if !OPT_DUMBVM
+#if OPT_PROJECT
 int vm_fault(int faulttype, vaddr_t faultaddress){
 
-    // if(faultaddress >= 0x412000)
-    //     kprintf("TLB miss for 0x%x\n",faultaddress);
+    #if OPT_DEBUG
+    print_tlb();
+    #endif
 
-    //print_tlb();
-
-    //kprintf("\nfault address: 0x%x\n",faultaddress);
-    int spl = splhigh(); // so that the control does nit pass to another waiting process.
+    DEBUG(DB_VM,"\nfault address: 0x%x\n",faultaddress);
+    int spl = splhigh(); // so that the control does not pass to another waiting process.
     paddr_t paddr;
   
     faultaddress &= PAGE_FRAME;
@@ -98,9 +97,6 @@ int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
     for(entry = 0; entry <NUM_TLB; entry++){
         valid = tlb_entry_is_valid(entry);
         if(!valid){
-            // if(entry==0){
-            //     pt_reset_tlb();
-            // }
             /*I can write the fault address here! that's a match,,,*/
                 hi = faultvaddr;
                 lo = faultpaddr | TLBLO_VALID;
@@ -119,7 +115,7 @@ int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
     }
     /*step 2: I have not found an invalid entry, so,,, look for a victim, override, update the correspnding statistic (REPLACE)*/
     entry = tlb_victim();
-     hi = faultvaddr;
+    hi = faultvaddr;
     lo = faultpaddr | TLBLO_VALID;
     /*is the segment a text segment?*/
     if(!is_RO){
@@ -128,7 +124,7 @@ int tlb_insert(vaddr_t faultvaddr, paddr_t faultpaddr){
     }
     tlb_read(&prevHi, &prevLo, entry);
     /*notify the pt that the entry with that virtual address is not in tlb anymore*/
-    cabodi(prevHi, curproc->p_pid);
+    update_tlb_bit(prevHi, curproc->p_pid);
     tlb_write(hi, lo, entry);
     /*update tlb faults replace*/
     add_tlb_type_fault(FAULT_W_REPLACE);
@@ -158,23 +154,21 @@ int tlb_invalidate_entry(paddr_t paddr){
 }
 
 void tlb_invalidate_all(void){
-    // int spl = splhigh(); // so that the control does nit pass to another waiting process.
     uint32_t hi, lo;
     pid_t pid = curproc->p_pid;
     if(previous_pid != pid) // the process (not the thread) changed
     {
-    //kprintf("NEW PROCESS RUNNING: %d INSTEAD OF %d\n",pid,previous_pid);
+    DEBUG(DB_VM,"NEW PROCESS RUNNING: %d INSTEAD OF %d\n",pid,previous_pid);
     add_tlb_invalidation();
     for(int i = 0; i<NUM_TLB; i++){
             if(tlb_entry_is_valid(i)){
                 tlb_read(&hi,&lo,i);
-                cabodi(hi,previous_pid);
+                update_tlb_bit(hi,previous_pid);
             }
             tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
             }
     previous_pid = pid;
     }
-    // splx(spl);
 }
 
 void print_tlb(void){

@@ -46,6 +46,7 @@
 #include "opt-sfs.h"
 #include "opt-net.h"
 #include "pt.h"
+#include "opt-debug.h"
 
 /*
  * In-kernel menu and command dispatcher.
@@ -137,16 +138,15 @@ common_prog(int nargs, char **args)
 	else{
 		pid_t pid;
 		pid = proc_getpid(proc);
-		// v = proc->p_addrspace->v;
 		pid_t returnpid;
 		returnpid = sys_waitpid(pid,(userptr_t)&exit_code,0);
 
 		KASSERT(returnpid==pid);
 
-		//free_forgotten_pages();
+		#if OPT_DEBUG
 		print_nkmalloc();
+		#endif
 		reorder_swapfile();
-		// vfs_close(v);
 
 		kprintf("The thread exited with code %d\n",exit_code);
 	}

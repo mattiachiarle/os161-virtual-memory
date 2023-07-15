@@ -7,10 +7,11 @@
 #include "synch.h"
 #include "spl.h"
 #include "opt-debug.h"
-#include "opt-alloc_ht.h"
 
 int pt_active;
-int nkmalloc;
+#if OPT_DEBUG
+int nkmalloc; //nkmalloc = number of pages allocated with kmalloc - number of pages freed
+#endif
 
 /*
  * Data structure to handle the page table
@@ -21,40 +22,33 @@ struct pt_entry
     vaddr_t page; // virt page in the frame
     pid_t pid;    // processID
     uint8_t ctl;  // some bits for control; from the lower:  Validity bit, Reference bit, isInTLB bit, ...
-                 //  could be added other bits
-    struct lock *entry_lock;
-    struct cv *entry_cv;
 } entr;
 
 struct ptInfo
 {
     struct pt_entry *pt; // our IPT
     int ptSize;          // IPT size, in number of pte
-    paddr_t firstfreepaddr;
-    struct lock *pt_lock;
-    struct cv *pt_cv;
-    int *contiguous;
-    // struct spinlock test;
-    // struct semaphore *sem;
+    paddr_t firstfreepaddr; //Offset to use to compute the physical address of the frames
+    struct lock *pt_lock; //Necessary for the cv
+    struct cv *pt_cv; //Used to sleep if the IPT is full
+    int *contiguous; //Used to keep track of how many pages we need to free
 } peps;
 
 struct hashentry  // single entry of hashtable
 {
     int iptentry;   // "ptr" to IPT entry
-    vaddr_t vad;    
-    pid_t pid;
+    vaddr_t vad; //virtual address of the entry
+    pid_t pid; //pid of the entry
     struct hashentry *next;  //ptr to next hashentry
 };
 
 struct hashT   // struct   
 {
     struct hashentry **table;   // array of list of hashentry with dimension size.
-    int size; // 1.3 times the IPT
+    int size; // 2 times the IPT
 } htable;
 
-#if !OPT_ALLOC_HT
-struct hashentry *unusedptrlist;  // list where all unused blocks are stored
-#endif
+struct hashentry *unusedptrlist;  // list where all unused blocks for the hast table are stored
 
 /*
  * PT INIT
@@ -114,17 +108,13 @@ void free_pages(pid_t);
 
 void add_in_hash(vaddr_t, pid_t, int);
 
-int cabodi(vaddr_t, pid_t);
+int update_tlb_bit(vaddr_t, pid_t);
 
 paddr_t get_contiguous_pages(int);
-
-int free_hash(struct hashentry **, pid_t);
 
 int get_index_from_hash(vaddr_t, pid_t);
 
 void free_contiguous_pages(vaddr_t);
-
-//void pt_reset_tlb(void);
 
 void copy_pt_entries(pid_t, pid_t);
 
@@ -132,14 +122,12 @@ void prepare_copy_pt(pid_t);
 
 void end_copy_pt(pid_t);
 
-void free_forgotten_pages(void);
-
 void print_nkmalloc(void);
 
 void remove_from_hash(vaddr_t, pid_t);
 
-void pt_reset_tlb(void);
-
 int get_hash_func(vaddr_t, pid_t);
+
+void htable_init(void);
 
 #endif
