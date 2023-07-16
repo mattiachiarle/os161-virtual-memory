@@ -138,17 +138,17 @@ int find_victim(vaddr_t vaddr, pid_t pid)
     #endif
     // if I am here there will be a replacement since all pages are valid
     for (i = lastIndex;; i = (i + 1) % peps.ptSize)
-    {
+    {       // enhanced second chance alg. looking for TLB bit and RB bit 
         if (peps.pt[i].page!=KMALLOC_PAGE && !GETTLBBIT(peps.pt[i].ctl) && !GETIOBIT(peps.pt[i].ctl) && !GETSWAPBIT(peps.pt[i].ctl)) //If so the page can be swapped out
-        {
+        {   // page to be valid == no IO, no SWAP, no contiguous and no in TLB
             if (GETREFBIT(peps.pt[i].ctl) == 0) // if Ref bit==0 victim found
             {
                 KASSERT(!GETTLBBIT(peps.pt[i].ctl));
                 KASSERT(!GETIOBIT(peps.pt[i].ctl));
                 KASSERT(!GETSWAPBIT(peps.pt[i].ctl));
                 KASSERT(peps.pt[i].page!=KMALLOC_PAGE);
-                old_pid=peps.pt[i].pid; //Due to issues with synchronization, we need to set all the new values before load/store operations, i.e. before sleeping. However, we save the old values before modifying them to use them in the future store.
-                peps.pt[i].pid=pid;
+                old_pid=peps.pt[i].pid; //Due to issues with synchronization, we need to set all the new values before load/store operations, i.e. before sleeping. 
+                peps.pt[i].pid=pid;             //However, we save the old values before modifying them to use them in the future store.
                 old_validity=GETVALBIT(peps.pt[i].ctl);
                 peps.pt[i].ctl = IOBITONE(peps.pt[i].ctl); //We'll perform an I/O operation (for sure read, and if necessary store too)
                 peps.pt[i].ctl = VALBITONE(peps.pt[i].ctl);
@@ -156,7 +156,7 @@ int find_victim(vaddr_t vaddr, pid_t pid)
                 peps.pt[i].page = vaddr;
                 if(old_validity){ //If the page was valid we save it in the swapfile before proceeding
                     remove_from_hash(old_v, old_pid); //We remove the page from the hash table too
-                    store_swap(old_v,old_pid,i * PAGE_SIZE + peps.firstfreepaddr);
+                    store_swap(old_v,old_pid,i * PAGE_SIZE + peps.firstfreepaddr);  // then we swap
                 } 
                 add_in_hash(vaddr, pid, i); //We add the new page to the hash table
                 lastIndex = (i + 1) % peps.ptSize; //New index for second chance
@@ -170,12 +170,12 @@ int find_victim(vaddr_t vaddr, pid_t pid)
         if((i + 1) % peps.ptSize == start_i){
             if(niter<2){ //We allow 2 full iterations on the IPT without interruptions to find a victim
                 niter++;
-                continue;
+                continue; 
             }
             else{ //We didn't find any victim. Since sizeof(IPT)>sizeof(TLB)+n_kmallocs, it means that there are potential victims but they can't be removed because currently they're involved in a I/O or in a swap.
                   //To avoid starvation (that would cause a deadlock since we disabled the interrupts) we wait until something changes.
                 lock_acquire(peps.pt_lock);
-                cv_wait(peps.pt_cv,peps.pt_lock); //To wait, we wait on the condition variable.
+                cv_wait(peps.pt_cv,peps.pt_lock); //To wait, we wait on the condition variable. then someone will broadcast 
                 lock_release(peps.pt_lock);
                 niter=0; //We allow again 2 iterations
             }
@@ -186,7 +186,7 @@ int find_victim(vaddr_t vaddr, pid_t pid)
 
 int get_hash_func(vaddr_t v, pid_t p)
 {
-    int val = (((int)v) % 24) + ((((int)p) % 8) << 24);
+    int val = (((int)v) % 24) + ((((int)p) % 8) << 8);
     val = val ^1234567891;
     val = val % htable.size;
     return val;
@@ -197,7 +197,7 @@ static int add=0;
 #endif
 
 void add_in_hash(vaddr_t vad, pid_t pid, int pos) // NEW - pos = position of the IPT
-{
+{   // take from unusedptrlist one list-block and insert into the hash table
     KASSERT(vad!=0);
     KASSERT(pid!=0);
     #if OPT_DEBUG
@@ -217,8 +217,8 @@ void add_in_hash(vaddr_t vad, pid_t pid, int pos) // NEW - pos = position of the
 }
 
 int get_index_from_hash(vaddr_t vad, pid_t pid)
-{
-    int val = get_hash_func(vad, pid);
+{  // 
+    int val = get_hash_func(vad, pid);   //take the correct entry
     struct hashentry *tmp = htable.table[val]; //from the array hashtable, take the correct list
     #if OPT_DEBUG
     if(tmp!=NULL)
@@ -227,7 +227,7 @@ int get_index_from_hash(vaddr_t vad, pid_t pid)
     while (tmp != NULL)   
     {
         KASSERT((unsigned int)tmp>0x80000000 && (unsigned int)tmp<=0x90000000);
-        if (tmp->vad == vad && tmp->pid == pid) 
+        if (tmp->vad == vad && tmp->pid == pid)     //if found 
         {
             return tmp->iptentry; // return the correct value
         }
@@ -241,13 +241,13 @@ static int rem=0;
 #endif
 
 void remove_from_hash(vaddr_t vad, pid_t pid) // insert again in unusedptrlist and REMOVE from hash table
-{    
+{    // remove from the hash table and put it again in userptrlist
     #if OPT_DEBUG   
     rem++;
     #endif
     int val = get_hash_func(vad, pid); 
     DEBUG(DB_VM,"Removing from hash 0x%x for process %d, pos %d\n",vad,pid,val);
-
+\       // classic element deletion from a list, the ptr points to the next-next one without losing any references
     struct hashentry *tmp = htable.table[val]; //We get the head of the list
     struct hashentry *prev=NULL; //Previous entry 
     if (tmp == NULL)
@@ -287,31 +287,31 @@ void remove_from_hash(vaddr_t vad, pid_t pid) // insert again in unusedptrlist a
     panic("nothing to remove found!!");
 }
 
-paddr_t get_page(vaddr_t v)
-{
+paddr_t get_page(vaddr_t v)  //it's the wrapper
+{  
 
     pid_t pid = proc_getpid(curproc); // get curpid here
     int res;
     paddr_t pp;
     res = pt_get_paddr(v, pid); //We search if the page is already in the page table
 
-    if (res != -1)
+    if (res != -1)  // page is in PT
     {
         pp = (paddr_t) res;
         add_tlb_reload();
-        return pp;
+        return pp;  //easy return page
     }
 
     DEBUG(DB_VM,"PID=%d wants to load 0x%x\n",pid,v);
 
-    int pos = findspace(v,pid); // find a free space
+    int pos = findspace(v,pid); // not in PT --> find a free space
     if (pos == -1) //No free space, so we select the victim
     {
         pos = find_victim(v, pid);
         KASSERT(pos<peps.ptSize);
-        pp = peps.firstfreepaddr + pos*PAGE_SIZE; //We compute the physical address
+        pp = peps.firstfreepaddr + pos*PAGE_SIZE; //We compute the physical address (pos is an index)
     }
-    else{
+    else{   //we found a space
         KASSERT(pos<peps.ptSize);
         add_in_hash(v, pid, pos); //We add an entry in the hash table
         pp = peps.firstfreepaddr + pos*PAGE_SIZE;
@@ -330,7 +330,7 @@ paddr_t get_page(vaddr_t v)
 }
 
 int pt_get_paddr(vaddr_t v, pid_t p)
-{
+{   // returns the right physical address, if present (using the hash map)
     int i = get_index_from_hash(v, p);//We search for the entry in the page table
     if(i==-1){
         return i; //Entry not found, so we return -1
@@ -346,12 +346,12 @@ int pt_get_paddr(vaddr_t v, pid_t p)
 }
 
 void free_pages(pid_t p)
-{
+{   // frees all pages from PT and the list using pid
 
     for (int i = 0; i < peps.ptSize; i++)
     {
         if (peps.pt[i].pid == p && GETVALBIT(peps.pt[i].ctl) && peps.pt[i].page!=KMALLOC_PAGE) //We don't free kmalloc pages when a process ends to avoid errors with kmalloc function
-        {
+        {   //of course cannot free is IO or SWAP
             KASSERT(peps.pt[i].page!=KMALLOC_PAGE);
             KASSERT(!GETSWAPBIT(peps.pt[i].ctl));
             KASSERT(!GETIOBIT(peps.pt[i].ctl));
@@ -386,11 +386,11 @@ void free_pages(pid_t p)
 }
 
 int update_tlb_bit(vaddr_t v, pid_t pid)
-{
+{     
 
     int i;
 
-    DEBUG(DB_VM,"Cabodi was called with vaddr=0x%x, pid=%d\n",v,pid);
+    DEBUG(DB_VM,"This function was called with vaddr=0x%x, pid=%d\n",v,pid);
 
     for (i = 0; i < peps.ptSize; i++)
     {
@@ -443,7 +443,7 @@ static int nfork=0;
 #endif
 
 paddr_t get_contiguous_pages(int npages){
-    
+    // used for alloc n contig pages from kernel
     DEBUG(DB_VM,"Process %d performs kmalloc for %d pages\n", curproc->p_pid,npages);
 
     int i, j, first=-1, valid, prev=0, old_val, first_iteration=0;
@@ -456,7 +456,7 @@ paddr_t get_contiguous_pages(int npages){
     }
 
     //FIRST STEP: search for npages contiguous non valid entries (to avoid swapping out) 
-
+    // it would be the greatest solution
     for (i = 0; i < peps.ptSize; i++)
     {
         valid = GETVALBIT(peps.pt[i].ctl);
@@ -465,7 +465,7 @@ paddr_t get_contiguous_pages(int npages){
         }
         if(!valid && GETTLBBIT(peps.pt[i].ctl)==0 && peps.pt[i].page!=KMALLOC_PAGE && !GETIOBIT(peps.pt[i].ctl) && !GETSWAPBIT(peps.pt[i].ctl) && (i==0 || prev)){
             first=i; //If the current entry is not valid while the previous one was valid (or if the first entry is not valid) i becomes the beginning of the interval
-        }
+        } 
         if(first>=0 && !valid && GETTLBBIT(peps.pt[i].ctl)==0 && !GETSWAPBIT(peps.pt[i].ctl) && peps.pt[i].page!=KMALLOC_PAGE && !GETIOBIT(peps.pt[i].ctl) && i-first==npages-1){ //We found npages contiguous entries not valid
             DEBUG(DB_VM,"Kmalloc for process %d entry%d\n",curproc->p_pid,first);
             for(j=first;j<=i;j++){
@@ -494,7 +494,7 @@ paddr_t get_contiguous_pages(int npages){
     }
     #endif
 
-    while(1){
+    while(1){  // infinite loop, i don't exit until I find n contig victims
         for (i = lastIndex; i < peps.ptSize; i ++)
         {
             if (peps.pt[i].page!=KMALLOC_PAGE && GETTLBBIT(peps.pt[i].ctl) == 0 && !GETIOBIT(peps.pt[i].ctl) && !GETSWAPBIT(peps.pt[i].ctl)) //We check if the entry can be considered for removal (all these conditions are related to pages that must be left in their position)
@@ -599,11 +599,11 @@ void free_contiguous_pages(vaddr_t addr){
     #endif
 }
 
-void copy_pt_entries(pid_t old, pid_t new){
+void copy_pt_entries(pid_t old, pid_t new){ // used for forking
 
     int pos;
 
-    for(int i=0;i<peps.ptSize;i++){
+    for(int i=0;i<peps.ptSize;i++){  //idea is to copy all the pages related to oldpid again, but with newpid
         if(peps.pt[i].pid==old && GETVALBIT(peps.pt[i].ctl) && peps.pt[i].page!=KMALLOC_PAGE){ //We copy all the valid pages of old, except for kmalloc pages
             pos = findspace();
             if(pos==-1){ //If there isn't any free space we simply copy the page inside the swapfile (to avoid victim selection, which would be potentially unfeasible if we don't have enough space)
