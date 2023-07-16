@@ -408,7 +408,7 @@ proc_wait(struct proc *proc)
 
 	/* wait on semaphore or condition variable */ 
 	lock_acquire(proc->lock);
-	while(!proc->ended){
+	while(!proc->ended){ //Used to avoid starvation/deadlocks
 		cv_wait(proc->p_cv, proc->lock);
 	}
 	lock_release(proc->lock);

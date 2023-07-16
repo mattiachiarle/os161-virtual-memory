@@ -156,10 +156,9 @@ int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);
 int load_elf(struct vnode *v, vaddr_t *entrypoint);
 
 /**
- * this function checks if the as has been correcty set
- * @return 0 if not ok
- * @return 1 if ok
- * */
+ * This function checks if the as has been correcty set
+ * @return 0 if not ok, 1 if ok
+*/
 int as_is_ok(void);
 
 void vm_bootstrap(void);
@@ -168,6 +167,10 @@ void vm_tlbshootdown(const struct tlbshootdown *ts);
 vaddr_t alloc_kpages(unsigned npages);
 void free_kpages(vaddr_t addr);
 void addrspace_init(void);
+
+/**
+ * It creates the semaphore used to protect sys_fork
+*/
 void create_sem_fork(void);
 
 #endif /* _ADDRSPACE_H_ */

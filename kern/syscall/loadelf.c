@@ -377,6 +377,8 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 			return ENOEXEC;
 		}
 
+		//We save the program header for both the segments
+
 		if(i==1){
 			as->ph1 = ph;
 		}

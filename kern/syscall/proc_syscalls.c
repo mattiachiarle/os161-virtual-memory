@@ -22,6 +22,7 @@
 #include "pt.h"
 #include "opt-project.h"
 #include "addrspace.h"
+#include "opt-debug.h"
 
 /*
  * system calls for process management
@@ -36,21 +37,19 @@ sys__exit(int status)
   #if OPT_PROJECT
   free_pages(p->p_pid);
   remove_process_from_swap(p->p_pid);
-  //struct addrspace *as = proc_getas();
-  //vfs_close(as->v);
   #endif
 
-  //kprintf("Process %d ending\n",curproc->p_pid);
+  DEBUG(DB_VM,"Process %d ending\n",curproc->p_pid);
 
   p->p_status = status & 0xff; /* just lower 8 bits returned */
   proc_remthread(curthread);
 
   lock_acquire(p->lock);
-  p->ended=1;
+  p->ended=1; //Used since, otherwise, if the child ends before the parent waits for him, the parent will never be woken up
   cv_signal(p->p_cv, p->lock);
   lock_release(p->lock);
   splx(spl);
-  // kprintf("process %d signaled end/n", curproc->p_pid);
+  DEBUG(DB_VM,"process %d signaled end/n", curproc->p_pid);
   thread_exit();
 
   panic("thread_exit returned (should not happen)\n");
@@ -63,13 +62,12 @@ sys_waitpid(pid_t pid, userptr_t statusp, int options)
   struct proc *p = proc_search_pid(pid);
   int s;
   (void)statusp;
-  // kprintf("Process %d waits for %d\n",curproc->p_pid,pid);
+  DEBUG(DB_VM,"Process %d waits for %d\n",curproc->p_pid,pid);
   (void)options; /* not handled */
   if (p==NULL) return -1;
   s = proc_wait(p);
   
-  // kprintf("GOOD: process %d exited the proc wait of %d\n", curproc->p_pid, pid);
-  //kprintf("Wait for %d completed\n",pid);
+  DEBUG(DB_VM,"Process %d exited the proc wait of %d\n", curproc->p_pid, pid);
   if (statusp!=NULL) 
     *(int*)statusp = s;
   splx(spl);
@@ -93,18 +91,15 @@ call_enter_forked_process(void *tfv, unsigned long dummy) {
   panic("enter_forked_process returned (should not happen)\n");
 }
 
-// static int n=0;
-
 int sys_fork(struct trapframe *ctf, pid_t *retval) {
 
-  int waited=0;
+  int waited=0; //Used since the first kmalloc may occur before the initialization of sem_fork
   if(sem_fork){
     waited=1;
-    P(sem_fork);
+    P(sem_fork); //Small optimization. Since fork calls as_copy, that locks some pages in the IPT (avoiding their removal) if we allow many fork in parallel we may have the IPT blocked.
+                 //To avoid it, we allow only one process at a time to perform the fork.
   }
-  int spl = splhigh(); // so that the control does nit pass to another waiting process.
-  // n++;
-  // KASSERT(n==1);
+  int spl = splhigh();
   struct trapframe *tf_child;
   struct proc *newp;
   #if OPT_PROJECT
@@ -128,7 +123,7 @@ int sys_fork(struct trapframe *ctf, pid_t *retval) {
      of the current process */
   #if OPT_PROJECT
   newp->ended=0;
-  as_copy(curproc->p_addrspace, &(newp->p_addrspace), old, new);
+  as_copy(curproc->p_addrspace, &(newp->p_addrspace), old, new); //Copy the address space
   if(newp->p_addrspace == NULL){
     proc_destroy(newp); 
     return ENOMEM; 
@@ -165,7 +160,6 @@ int sys_fork(struct trapframe *ctf, pid_t *retval) {
   }
 
   *retval = newp->p_pid;
-  // n--;
   splx(spl);
   if(waited){
     V(sem_fork);

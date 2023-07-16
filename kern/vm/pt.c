@@ -247,7 +247,7 @@ void remove_from_hash(vaddr_t vad, pid_t pid) // insert again in unusedptrlist a
     #endif
     int val = get_hash_func(vad, pid); 
     DEBUG(DB_VM,"Removing from hash 0x%x for process %d, pos %d\n",vad,pid,val);
-\       // classic element deletion from a list, the ptr points to the next-next one without losing any references
+       // classic element deletion from a list, the ptr points to the next-next one without losing any references
     struct hashentry *tmp = htable.table[val]; //We get the head of the list
     struct hashentry *prev=NULL; //Previous entry 
     if (tmp == NULL)

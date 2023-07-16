@@ -28,17 +28,12 @@ struct swapfile{
     struct swap_cell **data;//Array of lists of data pages in the swapfile (one for each pid)
     struct swap_cell **stack;//Array of lists of stack pages in the swapfile (one for each pid)
     struct swap_cell *free;//List of free pages in the swapfile
-    struct swap_cell **start_text;
-    struct swap_cell **start_data;
-    struct swap_cell **start_stack;
-    void *kbuf;
+    void *kbuf;//Buffer used during the copy of swap pages
     #else
     struct swap_cell *elements;//Array of lists in the swapfile (one for each pid)
     #endif
     struct vnode *v;//vnode of the swapfile
     int size;//Number of pages stored in the swapfile
-    struct lock *s_lock;//Used to allow mutual exclusion on the swapfile
-    struct semaphore *s_sem;
 };
 
 /**
@@ -46,12 +41,12 @@ struct swapfile{
 */
 struct swap_cell{
     vaddr_t vaddr;//Virtual address corresponding to the stored page
-    int load,store,swap;
+    int store;//Flag that tells to us if we're performing a store operation on a specific page or not
     #if OPT_SW_LIST
     struct swap_cell *next;
     paddr_t offset;//Offset of the swap element within the swapfile
-    struct cv *cell_cv;
-    struct lock *cell_lock;
+    struct cv *cell_cv;//Used to wait for the store operation to end
+    struct lock *cell_lock;//Necessary to perform cv_wait
     #else
     pid_t pid; //Pid of the process that owns that page. If pid=-1 the page is free
     #endif
@@ -100,12 +95,17 @@ void remove_process_from_swap(pid_t);
 */
 void copy_swap_pages(pid_t, pid_t);
 
-void prepare_copy_swap(pid_t, pid_t);
-
-void end_copy_swap(pid_t);
-
+/**
+ * Debugging function. Given the pid, it prints text, data and stack lists.
+ * 
+ * @param pid_t: pid of the process.
+*/
 void print_list(pid_t);
 
+/**
+ * Optimization function. After the end of the whole program, we sort again all the pages in the swapfile.
+ * In fact, the smaller the offset the faster the I/O, and so thanks to this function we don't worsen performances.
+*/
 void reorder_swapfile(void);
 
 #endif /* _SWAPFILE_H_ */

@@ -50,8 +50,8 @@ struct hashT // struct
 
 struct hashentry *unusedptrlist; // list where all unused blocks for the hast table are stored
 
-/*
- * PT INIT
+/**
+ * It initializes the page table.
  */
 void pt_init(void);
 
@@ -148,19 +148,15 @@ int get_index_from_hash(vaddr_t, pid_t);
  * @param vaddr_t: virtual address
  *
  *
- * @return void
  */
 void free_contiguous_pages(vaddr_t);
 
 /**
- * This function is used to copy inside PT or Swap-file all the pages of the old pid, but with a new one
- *  used for forks
+ * This function is used to copy inside PT or Swap-file all the pages of the old pid for the new one
  *
  * @param pid_t: old pid to copy from
  * @param pid_t: new pid to add for each page
  *
- *
- * @return void
  */
 void copy_pt_entries(pid_t, pid_t);
 
@@ -184,6 +180,9 @@ void prepare_copy_pt(pid_t);
  */
 void end_copy_pt(pid_t);
 
+/**
+ * Debugging function, used to print number of kmalloc - number of kfree
+*/
 void print_nkmalloc(void);
 
 /**
@@ -210,10 +209,7 @@ void remove_from_hash(vaddr_t, pid_t);
 int get_hash_func(vaddr_t, pid_t);
 
 /**
- * This function inits the hash table.
- *
- *
- * @return void
+ * This function initializes the hash table.
  */
 void htable_init(void);
 

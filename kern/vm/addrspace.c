@@ -52,10 +52,6 @@ as_create(void)
 		return NULL;
 	}
 
-	/*
-	 * Initialize as needed.
-	 */
-
 	as->as_vbase1 = 0;
 	as->as_npages1 = 0;
 	as->as_vbase2 = 0;
@@ -74,32 +70,21 @@ as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp)
 		return ENOMEM;
 	}
 
-	/*
-	 * Write this.
-	 */
-
-	// KASSERT(old->as_vbase1==0x400000);
-	// KASSERT(old->as_vbase2==0x412000);
-	// KASSERT(old->as_npages1==3);
-	// KASSERT(old->as_npages2==18);
-
 	newas->as_vbase1 = old->as_vbase1;
 	newas->as_npages1 = old->as_npages1;
 	newas->as_vbase2 = old->as_vbase2;
 	newas->as_npages2 = old->as_npages2;
-	newas->ph1 = old->ph1;
+	newas->ph1 = old->ph1; //We copy the program headers
 	newas->ph2 = old->ph2;
-	newas->v = old->v;
-	old->v->vn_refcount++;
-	newas->initial_offset1=old->initial_offset1;
-	newas->initial_offset2=old->initial_offset2;
+	newas->v = old->v; //We copy the vnode related to the ELF file
+	old->v->vn_refcount++; //The file is owned by an additional process, so we increase refcount in the vnode. It'll be useful to understand when we can safely close the ELF file.
+	newas->initial_offset1 = old->initial_offset1;
+	newas->initial_offset2 = old->initial_offset2;
 
-	prepare_copy_pt(oldp);
-	prepare_copy_swap(oldp,newp);
-	copy_swap_pages(newp, oldp);
-	copy_pt_entries(oldp, newp);
-	end_copy_pt(oldp);
-	end_copy_swap(newp);
+	prepare_copy_pt(oldp); //Setup the page copy in the IPT
+	copy_swap_pages(newp, oldp); //Copy the swap pages
+	copy_pt_entries(oldp, newp); //Copy the IPT entries
+	end_copy_pt(oldp); //Restore the original situation
 
 	*ret = newas;
 	return 0;
@@ -108,16 +93,12 @@ as_copy(struct addrspace *old, struct addrspace **ret, pid_t oldp, pid_t newp)
 void
 as_destroy(struct addrspace *as)
 {
-	/*
-	 * Clean up as needed.
-	 */
 	if(as->v->vn_refcount==1){
-		vfs_close(as->v);
+		vfs_close(as->v); //We performed sys__exit on the last process owning the ELF file, so we close it
 	}
 	else{
-		as->v->vn_refcount--;
+		as->v->vn_refcount--; //We decrease the number of processes related to the ELF file
 	}
-
 
 	kfree(as);
 }
@@ -128,7 +109,7 @@ as_activate(void)
 	struct addrspace *as;
 	int spl;
 	spl = splhigh();
-	//kprintf("WE ARE RUNNING PROCESS %d\n",curproc->p_pid);
+	DEBUG(DB_VM,"WE ARE RUNNING PROCESS %d\n",curproc->p_pid);
 	as = proc_getas();
 	if (as == NULL) {
 		/*
@@ -138,7 +119,7 @@ as_activate(void)
 		return;
 	}
 
-	tlb_invalidate_all();//Since the TLB has not a PID field, we must invalidate it each time we activate a new address space
+	tlb_invalidate_all();//Since the TLB has not a PID field, we must invalidate it each time we activate a new process
 	splx(spl);
 }
 
@@ -158,9 +139,9 @@ as_deactivate(void)
  * VADDR+MEMSIZE.
  *
  * The READABLE, WRITEABLE, and EXECUTABLE flags are set if read,
- * write, or execute permission should be set on the segment. At the
- * moment, these are ignored. When you write the VM system, you may
- * want to implement them.
+ * write, or execute permission should be set on the segment. For
+ * us, they are useless since we handle permissions by analyzing
+ * the segment accesssed by a certain address.
  */
 int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
@@ -170,7 +151,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 
 	/* Align the region. First, the base... */
 	memsize += vaddr & ~(vaddr_t)PAGE_FRAME;
-	initial_offset=vaddr % PAGE_SIZE;
+	initial_offset=vaddr % PAGE_SIZE; //Since vaddr may not be aligned to a page, we save the initial offset (that otherwise would be lost after the next instruction)
 	vaddr &= PAGE_FRAME;
 
 	/* ...and now the length. */
@@ -178,7 +159,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 
 	npages = memsize / PAGE_SIZE;
 
-	/* We don't use these - exceptions about writing a readonly page will be raides by checking the virtual address */
+	/* We don't use these - exceptions about writing a readonly page will be raised by checking the virtual address */
 	(void)readable;
 	(void)writeable;
 	(void)executable;
@@ -232,9 +213,6 @@ as_complete_load(struct addrspace *as)//not needed with on demand paging since w
 int
 as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 {
-	/*
-	 * Write this.
-	 */
 
 	(void)as;
 
@@ -244,7 +222,7 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	return 0;
 }
 
-int as_is_ok(){
+int as_is_ok(void){
     struct addrspace *as = proc_getas();
     if(as == NULL)
         return 0;
@@ -260,9 +238,9 @@ int as_is_ok(){
 }
 
 void vm_bootstrap(void){
-	swap_init();
-	pt_init();
-	htable_init();
+	swap_init(); //We initialize the swapfile. It's done before pt_init since in this way the pages allocated with kmalloc won't be stored in pt, causing an useless overhead since they'll never be removed.
+	pt_init(); //We initialize the page table
+	htable_init(); //We initialize the hash table
 }
 
 void vm_tlbshootdown(const struct tlbshootdown *ts){
@@ -273,7 +251,7 @@ void vm_tlbshootdown(const struct tlbshootdown *ts){
 void vm_shutdown(void){
 	
 	#if OPT_DEBUG
-	for(int i=0;i<peps.ptSize;i++){
+	for(int i=0;i<peps.ptSize;i++){ //Print all the entries in the page table that haven't been correctly freed
 		if(peps.pt[i].ctl!=0){
 			kprintf("Entry%d has not been freed! ctl=%d, pid=%d\n",i,peps.pt[i].ctl,peps.pt[i].pid);
 		}
@@ -283,9 +261,12 @@ void vm_shutdown(void){
 	}
 	#endif
 
-	print_stats();
+	print_stats(); //Print statistics
 }
 
+/**
+ * Function used while the page table is not active
+*/
 static
 paddr_t
 getppages(unsigned long npages)
@@ -299,11 +280,11 @@ getppages(unsigned long npages)
 
 vaddr_t alloc_kpages(unsigned npages){
 
-	int spl = splhigh();
+	int spl = splhigh(); //Disable the interrupts. In this way, we can't perform context switches during critical operations
 	
 	paddr_t p;
 
-	spinlock_acquire(&stealmem_lock);
+	spinlock_acquire(&stealmem_lock); //Used to avoid race conditions on pt_active
 	
 	if(!pt_active){
 		p = getppages(npages);
@@ -312,14 +293,14 @@ vaddr_t alloc_kpages(unsigned npages){
 		#if OPT_DEBUG
 		nkmalloc+=npages;
 		#endif
-		spinlock_release(&stealmem_lock);
-		p = get_contiguous_pages(npages);
+		spinlock_release(&stealmem_lock); //We must release the spinlock to avoid conflicts with the synchronization mechanisms of I/O operations
+		p = get_contiguous_pages(npages); //Get npages contiguous pages from the page table
 		spinlock_acquire(&stealmem_lock);
 	}
 
 	spinlock_release(&stealmem_lock);
 
-	splx(spl);
+	splx(spl); //Enable again the interrupts
 
 	KASSERT(PADDR_TO_KVADDR(p)>0x80000000 && PADDR_TO_KVADDR(p)<=0x90000000);
 
@@ -333,7 +314,8 @@ void free_kpages(vaddr_t addr){
 	spinlock_acquire(&stealmem_lock);
 
 	if(!pt_active || addr < PADDR_TO_KVADDR(peps.firstfreepaddr)){
-		//Currently we accept a memory leak since the cost of having an additional data structure would be more expensive than the potential memory leaks that could occur
+		//We accept a memory leak since the cost of having an additional data structure would be more expensive than the potential memory leaks that could occur,
+		//also because the data structures allocated with kmalloc before the activation of the page table are never freed.
 		//Alternative: move contiguous in another place (coremap.c?)
 	}
 	else{
