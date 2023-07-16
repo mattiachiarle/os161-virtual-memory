@@ -18,6 +18,7 @@
 #include <elf.h>
 #include "vmstats.h"
 #include "opt-project.h"
+#include "opt-debug.h"
 
 /**
  * Given the virtual address vaddr, it finds the corresponding page and it loads it into the provided paddr.
