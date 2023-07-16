@@ -18,36 +18,31 @@ struct tlb{
 
 pid_t old_pid;
 
-/*
- * This function is called after a TLB miss, and it's used to remove
- * an entry from the TLB to store the new one.
- *
- * The first version will use a round robin replacement algorithm,
- * while the second one will use a FIFO strategy.
- * 
- * It'll call a function of the page table to update some relevant
- * fields (like the cached bit).
- * TODO: I don't think that the cached bit is needed anymore
- * 
- * @return: -1 if any error occurred, otherwise the index of the removed entry
- */
+/*not needed anymore, we leave it here in case we want it to be a wrapper for the mips instruction TLB_INVALIDATE*/
 int tlb_remove(void);
 
-/*this is the functions that finsd the entry to sacrifice*/
+/**
+ * This function chooses the entry to sacrifice in the TLB and returns its index.
+*/
 int tlb_victim(void);
 
 /*this function tells me whether the address is in the text segment (code segment) and therefore is not writable*/
 int segment_is_readonly(vaddr_t vaddr);
 
-/*this functions inserts the faultvaddr into the tlb with the corresponding phisical address*/
+/**
+ * This function writes a new entry in the TLB. It receives as parameters the fault address (virtual) and the 
+ * corresponding physical one received by the page table. 
+ * It finds a space to insert the entry (vaddr, paddr) by means of the tlb_victim.
+*/
 int tlb_insert(vaddr_t vaddr, paddr_t faultpaddr);
 
-/**this entry tells me if the entry of the tlb is valid
-*the validity bit is stored in the lower part
+/**
+ * This function tells me if the entry in the TLB at index i is valid or not.
 */
 int tlb_entry_is_valid(int i);
 
 /**
+ * DISCLAIMER: this function has never been used.
  * this function inavlidates the entry corresponding to the given physical address.
  * It is useful when an entry in the PT is invalidated and the change has to be propagated to the TLB.
  * @return: 0 if ok
@@ -55,10 +50,14 @@ int tlb_entry_is_valid(int i);
 int tlb_invalidate_entry(paddr_t paddr);
 
 /**
- * this function invalidates the whole tlb
+ * this function has to invalidate the TLB when there is a switch from a process to another. Indeed, 
+ * the TLB is common for all processes and does not have a "pid" field.
 */
 void tlb_invalidate_all(void);
 
+/**
+ * Useful for debugging reasons eheh :^)
+*/
 void print_tlb(void);
 
 
